@@ -76,6 +76,33 @@ func TestEffectDependenciesAreDynamic(t *testing.T) {
 	}
 }
 
+func TestNewSignalFuncSupportsCustomEquality(t *testing.T) {
+	items := NewSignalFunc([]int{1, 2}, func(a, b []int) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+		return true
+	})
+	runs := 0
+	Effect(func() {
+		runs++
+		_ = items.Get()
+	})
+	items.Set([]int{1, 2})
+	if runs != 1 {
+		t.Fatalf("equal slice should not re-run effect: runs=%d", runs)
+	}
+	items.Set([]int{1, 2, 3})
+	if runs != 2 {
+		t.Fatalf("changed slice should re-run effect: runs=%d", runs)
+	}
+}
+
 func TestDisposeStopsEffect(t *testing.T) {
 	count := NewSignal(0)
 	runs := 0

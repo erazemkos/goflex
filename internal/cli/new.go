@@ -13,7 +13,7 @@ import (
 
 // stableFrameworkVersion is the released goflex version that scaffolded apps
 // depend on by default. Bump this when cutting a new release.
-const stableFrameworkVersion = "v0.2.0"
+const stableFrameworkVersion = "v0.2.1"
 
 func newCmd() *cobra.Command {
 	cfg := NewConfig{Template: "default"}

@@ -152,7 +152,7 @@ func TestNewCommandUsesStableVersionWithoutLocalReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	modText := string(mod)
-	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.2.0") {
+	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.2.1") {
 		t.Fatalf("default mode should pin stable version, got:\n%s", mod)
 	}
 	if strings.Contains(modText, "github.com/erazemkos/goflex main") {
