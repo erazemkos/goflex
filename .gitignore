@@ -1,0 +1,10 @@
+bin/
+dist/
+*.out
+*.db
+*.db-*
+coverage.txt
+node_modules/
+.goflex/
+*.generated.go
+.DS_Store

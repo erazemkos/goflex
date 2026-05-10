@@ -1,0 +1,16 @@
+{
+  "tag": "div",
+  "props": {
+    "className": "x"
+  },
+  "children": [
+    {
+      "tag": "h1",
+      "children": [
+        {
+          "text": "Hi"
+        }
+      ]
+    }
+  ]
+}
