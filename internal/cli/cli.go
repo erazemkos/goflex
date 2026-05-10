@@ -57,7 +57,12 @@ func requireArgs(n int) cobra.PositionalArgs {
 	}
 }
 
-type NewConfig struct{ Name, Template, Module string }
+type NewConfig struct {
+	Name     string
+	Template string
+	Module   string
+	Dev      bool
+}
 type DevConfig struct {
 	Addr   string
 	NoOpen bool

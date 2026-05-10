@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,7 +83,7 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if !strings.Contains(stdout, "created GoFlex app myapp") {
 		t.Fatalf("stdout=%s", stdout)
 	}
-	for _, file := range []string{"go.mod", "index.html", "tailwind.config.css", "cmd/server/main.go", "cmd/web/main.go", "internal/web/app.go", "assets/.gitkeep"} {
+	for _, file := range []string{"go.mod", "index.html", "tailwind.config.css", "cmd/server/main.go", "cmd/web/main.go", "internal/web/app.go", "internal/api/greeting.go", "shared/types.go", "assets/.gitkeep"} {
 		if _, err := os.Stat(filepath.Join(tmp, "myapp", file)); err != nil {
 			t.Fatalf("missing %s: %v", file, err)
 		}
@@ -90,14 +92,14 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "Client-side reactivity") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
+	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "Typed client + API demo") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
 		t.Fatalf("bad app template:\n%s", b)
 	}
 	webMain, err := os.ReadFile(filepath.Join(tmp, "myapp", "cmd", "web", "main.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(webMain), "addEventListener") || !strings.Contains(string(webMain), "render(state)") {
+	if !strings.Contains(string(webMain), "addEventListener") || !strings.Contains(string(webMain), "shared.GreetingResponse") || !strings.Contains(string(webMain), "fetchGreeting(state)") {
 		t.Fatalf("bad web main template:\n%s", webMain)
 	}
 	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
@@ -113,7 +115,7 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	}
 }
 
-func TestNewCommandUsesMainBranchWithoutLocalReplace(t *testing.T) {
+func TestNewCommandUsesStableVersionWithoutLocalReplace(t *testing.T) {
 	t.Setenv("GOFLEX_FRAMEWORK_PATH", "")
 	tmp := t.TempDir()
 	withCwd(t, tmp)
@@ -126,8 +128,74 @@ func TestNewCommandUsesMainBranchWithoutLocalReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	modText := string(mod)
-	if !strings.Contains(modText, "github.com/erazemkos/goflex main") || strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
-		t.Fatalf("bad go.mod:\n%s", mod)
+	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.1.0") {
+		t.Fatalf("default mode should pin stable version, got:\n%s", mod)
+	}
+	if strings.Contains(modText, "github.com/erazemkos/goflex main") {
+		t.Fatalf("default mode must not use main, got:\n%s", mod)
+	}
+	if strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
+		t.Fatalf("default mode should not include a replace directive, got:\n%s", mod)
+	}
+}
+
+func TestNewCommandDevModeResolvesMainPseudoVersion(t *testing.T) {
+	t.Setenv("GOFLEX_FRAMEWORK_PATH", "")
+	tmp := t.TempDir()
+	withCwd(t, tmp)
+	restore := fakeDevResolve(func(dir string, _, _ io.Writer) error {
+		modPath := filepath.Join(dir, "go.mod")
+		b, err := os.ReadFile(modPath)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(b), "github.com/erazemkos/goflex") {
+			t.Errorf("dev mode should not pin goflex before go get runs, got:\n%s", b)
+		}
+		if strings.Contains(string(b), "github.com/erazemkos/goflex main") {
+			t.Errorf("dev mode must not leave `main` in go.mod, got:\n%s", b)
+		}
+		updated := string(b) + "\nrequire github.com/erazemkos/goflex v0.1.1-0.20260510150422-a1c0feb2ee84\n"
+		return os.WriteFile(modPath, []byte(updated), 0o644)
+	})
+	defer restore()
+	stdout, stderr, code := runCLI("new", "myapp", "--dev")
+	if code != 0 {
+		t.Fatalf("new --dev code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Using latest goflex main branch via GOPROXY=direct...") {
+		t.Fatalf("expected dev mode banner in stdout, got=%s", stdout)
+	}
+	if !ParsedNewConfig().Dev {
+		t.Fatalf("parsed config should record Dev=true, got %+v", ParsedNewConfig())
+	}
+	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	modText := string(mod)
+	if strings.Contains(modText, "github.com/erazemkos/goflex main") {
+		t.Fatalf("dev mode must resolve to a pseudo-version, not leave `main`:\n%s", mod)
+	}
+	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.1.1-0.20260510150422-a1c0feb2ee84") {
+		t.Fatalf("dev mode should leave go.mod pinned to resolved pseudo-version, got:\n%s", mod)
+	}
+}
+
+func TestNewCommandDevModePropagatesResolveError(t *testing.T) {
+	t.Setenv("GOFLEX_FRAMEWORK_PATH", "")
+	tmp := t.TempDir()
+	withCwd(t, tmp)
+	restore := fakeDevResolve(func(string, io.Writer, io.Writer) error {
+		return errors.New("goflex new --dev requires network access to GitHub; fake resolve failed")
+	})
+	defer restore()
+	_, stderr, code := runCLI("new", "myapp", "--dev")
+	if code == 0 {
+		t.Fatalf("expected non-zero exit, stderr=%s", stderr)
+	}
+	if !strings.Contains(stderr, "requires network access to GitHub") {
+		t.Fatalf("expected network-access hint in stderr, got=%s", stderr)
 	}
 }
 
@@ -263,6 +331,7 @@ func TestSubcommandsExposeExpectedFlags(t *testing.T) {
 	root := NewRootCommand()
 	mustFindFlag(t, root, []string{"new"}, "template")
 	mustFindFlag(t, root, []string{"new"}, "module")
+	mustFindFlag(t, root, []string{"new"}, "dev")
 	mustFindFlag(t, root, []string{"dev"}, "addr")
 	mustFindFlag(t, root, []string{"dev"}, "no-open")
 	mustFindFlag(t, root, []string{"build"}, "out")
@@ -276,6 +345,12 @@ func TestSubcommandsExposeExpectedFlags(t *testing.T) {
 	mustFindFlag(t, root, []string{"db", "migrate"}, "auto")
 	mustFindFlag(t, root, []string{"db", "rollback"}, "step")
 	mustFindFlag(t, root, []string{"db", "status"}, "dsn")
+}
+
+func fakeDevResolve(fn func(string, io.Writer, io.Writer) error) func() {
+	old := runDevResolve
+	runDevResolve = fn
+	return func() { runDevResolve = old }
 }
 
 func fakeDevForTest() func() {

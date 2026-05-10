@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,17 +81,18 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 type devServer struct {
-	dir        string
-	out        io.Writer
-	server     *http.Server
-	listener   net.Listener
-	broker     *broker
-	lastErr    atomic.Value
-	status     Status
-	statusMu   sync.Mutex
-	backendMu  sync.Mutex
-	backendCmd *exec.Cmd
-	done       chan error
+	dir         string
+	out         io.Writer
+	server      *http.Server
+	listener    net.Listener
+	broker      *broker
+	lastErr     atomic.Value
+	status      Status
+	statusMu    sync.Mutex
+	backendMu   sync.Mutex
+	backendCmd  *exec.Cmd
+	backendAddr string
+	done        chan error
 }
 
 func newServer(dir string, out io.Writer) *devServer {
@@ -99,6 +102,11 @@ func newServer(dir string, out io.Writer) *devServer {
 }
 
 func (s *devServer) start(ctx context.Context, addr string) error {
+	backendAddr, err := pickBackendAddr()
+	if err != nil {
+		return err
+	}
+	s.backendAddr = backendAddr
 	s.initialBuild(ctx)
 
 	mux := http.NewServeMux()
@@ -106,6 +114,8 @@ func (s *devServer) start(ctx context.Context, addr string) error {
 	mux.HandleFunc("/_goflex/error.json", s.handleError)
 	mux.HandleFunc("/_goflex/runtime.js", s.handleRuntime)
 	mux.HandleFunc("/_goflex/status.json", s.handleStatus)
+	mux.HandleFunc("/api", s.handleAPIProxy)
+	mux.HandleFunc("/api/", s.handleAPIProxy)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { serveApp(s.dir, w, r) })
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -200,6 +210,19 @@ func (s *devServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(st)
 }
 
+func (s *devServer) handleAPIProxy(w http.ResponseWriter, r *http.Request) {
+	if s.backendAddr == "" || findServerEntry(s.dir) == "" {
+		http.NotFound(w, r)
+		return
+	}
+	target, err := url.Parse("http://" + s.backendAddr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	httputil.NewSingleHostReverseProxy(target).ServeHTTP(w, r)
+}
+
 func (s *devServer) currentError() *BuildError {
 	be, _ := s.lastErr.Load().(*BuildError)
 	return be
@@ -224,6 +247,10 @@ func (s *devServer) inc(fn func(*Status)) {
 
 func (s *devServer) initialBuild(ctx context.Context) {
 	if _, err := generateAPI(s.dir, "api"); err != nil {
+		s.setError(err)
+		return
+	}
+	if err := s.rebuildServer(ctx); err != nil {
 		s.setError(err)
 		return
 	}
@@ -419,7 +446,7 @@ func (s *devServer) rebuildServer(ctx context.Context) error {
 	serverCtx, cancel := context.WithCancel(ctx)
 	cmd = exec.CommandContext(serverCtx, bin)
 	cmd.Dir = s.dir
-	cmd.Env = append(os.Environ(), "GOFLEX_DEV_BACKEND=1")
+	cmd.Env = append(os.Environ(), "GOFLEX_DEV_BACKEND=1", "PORT="+backendPort(s.backendAddr))
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return err
@@ -456,13 +483,33 @@ func (s *devServer) stopBackend() {
 }
 
 func findServerEntry(dir string) string {
-	candidates := []string{filepath.Join(dir, "cmd", "server"), filepath.Join(dir, "cmd", "app"), dir}
+	candidates := []string{filepath.Join(dir, "cmd", "server"), filepath.Join(dir, "cmd", "app")}
 	for _, c := range candidates {
 		if st, err := os.Stat(c); err == nil && st.IsDir() {
 			return relOrAbs(dir, c)
 		}
 	}
 	return ""
+}
+
+func pickBackendAddr() (string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		return "", err
+	}
+	return addr, nil
+}
+
+func backendPort(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "8080"
+	}
+	return port
 }
 
 func relOrAbs(root, path string) string {
