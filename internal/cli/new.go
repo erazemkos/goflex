@@ -13,7 +13,7 @@ import (
 
 // stableFrameworkVersion is the released goflex version that scaffolded apps
 // depend on by default. Bump this when cutting a new release.
-const stableFrameworkVersion = "v0.1.0"
+const stableFrameworkVersion = "v0.2.0"
 
 func newCmd() *cobra.Command {
 	cfg := NewConfig{Template: "default"}
@@ -212,86 +212,94 @@ import (
 	"%s/internal/web"
 	"%s/shared"
 
+	"github.com/erazemkos/goflex/pkg/reactive"
 	"github.com/gopherjs/gopherjs/js"
 )
 
-type appState struct {
-	count    int
-	name     string
-	greeting shared.GreetingResponse
-	loading  bool
-	err      string
-}
-
 func main() {
-	state := &appState{name: "Gopher"}
+	count := reactive.NewSignal(0)
+	name := reactive.NewSignal("Gopher")
+	greeting := reactive.NewSignal(shared.GreetingResponse{})
+	loading := reactive.NewSignal(true)
+	errText := reactive.NewSignal("")
+
+	bindText(web.IDCount, func() string {
+		return itoa(count.Get())
+	})
+	bindText(web.IDDoubleCount, func() string {
+		return itoa(count.Get() * 2)
+	})
+	bindText(web.IDClickSummary, func() string {
+		c := count.Get()
+		return "You clicked " + itoa(c) + " " + plural(c, "time", "times") + "."
+	})
+	bindText(web.IDGreeting, func() string {
+		if loading.Get() {
+			return "Loading typed API response…"
+		}
+		if errText.Get() != "" {
+			return "API error: " + errText.Get()
+		}
+		return greeting.Get().Message
+	})
+	bindText(web.IDNameLength, func() string {
+		return itoa(greeting.Get().Length)
+	})
+	setText(web.IDAPIPath, "/api"+shared.GreetingPath)
 
 	byID(web.IDIncrement).Call("addEventListener", "click", func() {
-		state.count++
-		render(state)
+		count.Update(func(c int) int { return c + 1 })
 	})
 	byID(web.IDDecrement).Call("addEventListener", "click", func() {
-		state.count--
-		render(state)
+		count.Update(func(c int) int { return c - 1 })
 	})
 	byID(web.IDReset).Call("addEventListener", "click", func() {
-		state.count = 0
-		render(state)
+		count.Set(0)
 	})
 	byID(web.IDNameInput).Call("addEventListener", "input", func(event *js.Object) {
-		state.name = event.Get("target").Get("value").String()
-		fetchGreeting(state)
-		render(state)
+		name.Set(event.Get("target").Get("value").String())
+		fetchGreeting(name, greeting, loading, errText)
 	})
 
-	fetchGreeting(state)
-	render(state)
+	fetchGreeting(name, greeting, loading, errText)
 }
 
-func fetchGreeting(state *appState) {
-	state.loading = true
-	state.err = ""
-	name := js.Global.Call("encodeURIComponent", fallback(state.name, "Gopher")).String()
-	js.Global.Call("fetch", "/api"+shared.GreetingPath+"?name="+name).
+func fetchGreeting(
+	name *reactive.Signal[string],
+	greeting *reactive.Signal[shared.GreetingResponse],
+	loading *reactive.Signal[bool],
+	errText *reactive.Signal[string],
+) {
+	loading.Set(true)
+	errText.Set("")
+	encodedName := js.Global.Call("encodeURIComponent", fallback(name.Peek(), "Gopher")).String()
+	js.Global.Call("fetch", "/api"+shared.GreetingPath+"?name="+encodedName).
 		Call("then", func(resp *js.Object) {
 			if !resp.Get("ok").Bool() {
-				state.loading = false
-				state.err = "API returned " + resp.Get("status").String()
-				render(state)
+				errText.Set("API returned " + resp.Get("status").String())
+				loading.Set(false)
 				return
 			}
 			resp.Call("json").Call("then", func(data *js.Object) {
-				state.greeting = shared.GreetingResponse{
+				greeting.Set(shared.GreetingResponse{
 					Message: data.Get("message").String(),
 					Source:  data.Get("source").String(),
 					Length:  data.Get("length").Int(),
-				}
-				state.loading = false
-				state.err = ""
-				render(state)
+				})
+				errText.Set("")
+				loading.Set(false)
 			})
 		}).
 		Call("catch", func(err *js.Object) {
-			state.loading = false
-			state.err = err.String()
-			render(state)
+			errText.Set(err.String())
+			loading.Set(false)
 		})
 }
 
-func render(state *appState) {
-	count := itoa(state.count)
-	setText(web.IDCount, count)
-	setText(web.IDDoubleCount, itoa(state.count*2))
-	setText(web.IDClickSummary, "You clicked "+count+" "+plural(state.count, "time", "times")+".")
-	if state.loading {
-		setText(web.IDGreeting, "Loading typed API response…")
-	} else if state.err != "" {
-		setText(web.IDGreeting, "API error: "+state.err)
-	} else {
-		setText(web.IDGreeting, state.greeting.Message)
-	}
-	setText(web.IDAPIPath, "/api"+shared.GreetingPath)
-	setText(web.IDNameLength, itoa(state.greeting.Length))
+func bindText(id web.ElementID, text func() string) reactive.DisposeFunc {
+	return reactive.Effect(func() {
+		setText(id, text())
+	})
 }
 
 func byID(id web.ElementID) *js.Object {
@@ -425,7 +433,8 @@ func forID(v ElementID) g.Node { return For(string(v)) }
 
 // Shell renders the full HTML document served at "/". The client entrypoint
 // (compiled by GopherJS) attaches event listeners to the elements below and
-// updates their text nodes in place, so there is no client-side templating.
+// updates fine-grained reactive text bindings in place, so there is no
+// client-side tree diffing.
 func Shell() string {
 	var buf bytes.Buffer
 	_ = HTML5(HTML5Props{
@@ -477,7 +486,7 @@ func page() g.Node {
 
 func counterCard() g.Node {
 	return Div(Class("rounded-2xl bg-slate-900/80 p-5"),
-		P(Class("text-sm text-slate-400"), g.Text("Typed selectors + local client state")),
+		P(Class("text-sm text-slate-400"), g.Text("Typed selectors + fine-grained signals")),
 		Div(Class("my-5 flex items-center justify-center gap-4"),
 			Button(id(IDDecrement), Class("h-12 w-12 rounded-full bg-slate-800 text-2xl font-bold hover:bg-slate-700"), g.Text("−")),
 			Div(id(IDCount), Class("min-w-20 text-center text-6xl font-black text-blue-300"), g.Text("0")),
@@ -563,7 +572,7 @@ const tailwindTemplate = `@import "tailwindcss";
 func appReadmeTemplate(module string) string {
 	return fmt.Sprintf(`# %s
 
-A basic GoFlex app with typed HTML, typed DOM selectors, browser-side Go state, and a shared frontend/backend API DTO.
+A basic GoFlex app with typed HTML, typed DOM selectors, fine-grained browser-side reactive signals, and a shared frontend/backend API DTO.
 
 ## Run
 
@@ -572,7 +581,7 @@ go mod tidy
 goflex dev
 `+"```"+`
 
-Open the URL printed by `+"`goflex dev`"+`. `+"`internal/web/app.go`"+` builds HTML with a small typed DSL, `+"`cmd/web/main.go`"+` keeps state in the browser with Go compiled to JavaScript, and `+"`shared/types.go`"+` defines the API DTO used by both frontend and backend.
+Open the URL printed by `+"`goflex dev`"+`. `+"`internal/web/app.go`"+` builds HTML with a small typed DSL, `+"`cmd/web/main.go`"+` uses reactive signals to update only the DOM text nodes that depend on changed state, and `+"`shared/types.go`"+` defines the API DTO used by both frontend and backend.
 
 ## Build
 

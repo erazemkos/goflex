@@ -9,6 +9,7 @@ type elementKind string
 const (
 	kindTag       elementKind = "tag"
 	kindText      elementKind = "text"
+	kindTextFunc  elementKind = "textFunc"
 	kindFragment  elementKind = "fragment"
 	kindComponent elementKind = "component"
 	kindRaw       elementKind = "raw"
@@ -21,6 +22,7 @@ type Element struct {
 	events   map[string]func(Event)
 	children []Element
 	text     string
+	textFunc func() string
 	comp     func(Props) Element
 	raw      any
 	name     string
@@ -88,6 +90,8 @@ func applyArgs(e *Element, args ...any) {
 			e.children = append(e.children, v...)
 		case string:
 			e.children = append(e.children, Text(v))
+		case func() string:
+			e.children = append(e.children, TextFunc(v))
 		case EventProp:
 			v.Apply(e)
 		case FieldBinding:
@@ -100,9 +104,14 @@ func applyArgs(e *Element, args ...any) {
 	}
 }
 
-func (e Element) Kind() string      { return string(e.kind) }
-func (e Element) Tag() string       { return e.tag }
-func (e Element) TextValue() string { return e.text }
+func (e Element) Kind() string { return string(e.kind) }
+func (e Element) Tag() string  { return e.tag }
+func (e Element) TextValue() string {
+	if e.kind == kindTextFunc && e.textFunc != nil {
+		return e.textFunc()
+	}
+	return e.text
+}
 func (e Element) Props() map[string]any {
 	out := map[string]any{}
 	for k, v := range e.props {
@@ -123,6 +132,15 @@ type Runtime interface {
 	CreateText(text string) any
 	UseRaw(value any) any
 	Mount(container any, element any)
+}
+
+// ReactiveTextRuntime is an optional Runtime extension for fine-grained text
+// bindings. A browser runtime can create one text node and use pkg/reactive to
+// update only that node whenever fn's signal dependencies change. The runtime
+// owns any effect disposal when that node is unmounted. Runtimes that do not
+// implement this extension receive the current value as static text.
+type ReactiveTextRuntime interface {
+	CreateReactiveText(fn func() string) any
 }
 
 // MountTarget pairs a Runtime with the concrete DOM/container value it should mount into.
@@ -157,6 +175,11 @@ func renderWithRuntime(e Element, rt Runtime) any {
 	switch e.kind {
 	case kindText:
 		return rt.CreateText(e.text)
+	case kindTextFunc:
+		if dynamic, ok := rt.(ReactiveTextRuntime); ok {
+			return dynamic.CreateReactiveText(e.textFunc)
+		}
+		return rt.CreateText(e.TextValue())
 	case kindRaw:
 		return rt.UseRaw(e.raw)
 	case kindFragment:

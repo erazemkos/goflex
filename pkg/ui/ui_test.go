@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+
+	"github.com/erazemkos/goflex/pkg/reactive"
 )
 
 func TestBasicElementConstruction(t *testing.T) {
@@ -139,6 +141,59 @@ func TestCustomComponentsAndProps(t *testing.T) {
 	props["name"] = "mutated"
 	if e.Children()[0].TextValue() != `Hello World #7 ok=true any=x missing=""` {
 		t.Fatal("component output changed after props mutation")
+	}
+}
+
+func TestTextFuncEvaluatesCurrentValue(t *testing.T) {
+	count := reactive.NewSignal(2)
+	e := TextFunc(func() string { return strconv.Itoa(count.Get() * 2) })
+	if e.Kind() != "textFunc" || e.TextValue() != "4" {
+		t.Fatalf("bad TextFunc element: kind=%s text=%q", e.Kind(), e.TextValue())
+	}
+	count.Set(3)
+	if e.TextValue() != "6" {
+		t.Fatalf("TextValue did not evaluate latest signal value: %q", e.TextValue())
+	}
+}
+
+func TestTextFuncUsesReactiveRuntimeForLocalUpdates(t *testing.T) {
+	count := reactive.NewSignal(1)
+	rt := &recordReactiveTextRuntime{}
+	node := Render(TextFunc(func() string { return strconv.Itoa(count.Get()) }), rt).(*recordReactiveTextNode)
+	defer rt.dispose.Dispose()
+	if node.Text != "1" || rt.textRuns != 1 {
+		t.Fatalf("initial node=%#v runs=%d", node, rt.textRuns)
+	}
+	count.Set(2)
+	if node.Text != "2" || rt.textRuns != 2 {
+		t.Fatalf("signal update should mutate same text node, node=%#v runs=%d", node, rt.textRuns)
+	}
+	other := reactive.NewSignal("x")
+	other.Set("y")
+	if node.Text != "2" || rt.textRuns != 2 {
+		t.Fatalf("unrelated signal re-rendered text node, node=%#v runs=%d", node, rt.textRuns)
+	}
+}
+
+func TestTextFuncFallsBackToStaticText(t *testing.T) {
+	count := reactive.NewSignal(1)
+	rt := &recordRuntime{}
+	node := Render(TextFunc(func() string { return strconv.Itoa(count.Get()) }), rt).(recordNode)
+	if node.Text != "1" {
+		t.Fatalf("initial static text=%q", node.Text)
+	}
+	count.Set(2)
+	if node.Text != "1" {
+		t.Fatalf("fallback runtime should not mutate already-rendered value: %q", node.Text)
+	}
+}
+
+func TestFuncStringChildBecomesTextFunc(t *testing.T) {
+	count := reactive.NewSignal(7)
+	e := Span(func() string { return strconv.Itoa(count.Get()) })
+	children := e.Children()
+	if len(children) != 1 || children[0].Kind() != "textFunc" || children[0].TextValue() != "7" {
+		t.Fatalf("bad func child: %#v", children)
 	}
 }
 
@@ -333,4 +388,30 @@ func (r *recordRuntime) UseRaw(value any) any       { return recordNode{Raw: val
 func (r *recordRuntime) Mount(container any, element any) {
 	r.container = container
 	r.element = element
+}
+
+type recordReactiveTextNode struct{ Text string }
+
+type recordReactiveTextRuntime struct {
+	node     *recordReactiveTextNode
+	textRuns int
+	dispose  reactive.DisposeFunc
+}
+
+func (r *recordReactiveTextRuntime) CreateElement(string, map[string]any, ...any) any {
+	panic("CreateElement should not be called")
+}
+func (r *recordReactiveTextRuntime) CreateFragment(...any) any {
+	panic("CreateFragment should not be called")
+}
+func (r *recordReactiveTextRuntime) CreateText(string) any { panic("CreateText should not be called") }
+func (r *recordReactiveTextRuntime) UseRaw(any) any        { panic("UseRaw should not be called") }
+func (r *recordReactiveTextRuntime) Mount(any, any)        {}
+func (r *recordReactiveTextRuntime) CreateReactiveText(fn func() string) any {
+	r.node = &recordReactiveTextNode{}
+	r.dispose = reactive.Effect(func() {
+		r.textRuns++
+		r.node.Text = fn()
+	})
+	return r.node
 }

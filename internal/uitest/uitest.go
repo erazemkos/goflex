@@ -33,8 +33,9 @@ func (r *Runtime) CreateFragment(children ...any) any {
 	return n
 }
 
-func (r *Runtime) CreateText(text string) any { return MockNode{Text: text} }
-func (r *Runtime) UseRaw(value any) any       { return MockNode{Raw: value} }
+func (r *Runtime) CreateText(text string) any              { return MockNode{Text: text} }
+func (r *Runtime) CreateReactiveText(fn func() string) any { return MockNode{Text: fn()} }
+func (r *Runtime) UseRaw(value any) any                    { return MockNode{Raw: value} }
 func (r *Runtime) Mount(container any, element any) {
 	r.MountedContainer = container
 	r.MountedElement = element

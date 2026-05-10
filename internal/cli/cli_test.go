@@ -116,8 +116,14 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(webMain), "addEventListener") || !strings.Contains(string(webMain), "shared.GreetingResponse") || !strings.Contains(string(webMain), "fetchGreeting(state)") {
-		t.Fatalf("bad web main template:\n%s", webMain)
+	webMainText := string(webMain)
+	for _, want := range []string{"addEventListener", "shared.GreetingResponse", "reactive.NewSignal", "bindText", "fetchGreeting(name, greeting, loading, errText)"} {
+		if !strings.Contains(webMainText, want) {
+			t.Fatalf("bad web main template, missing %q:\n%s", want, webMain)
+		}
+	}
+	if strings.Contains(webMainText, "func render(") {
+		t.Fatalf("web main should use fine-grained reactive bindings instead of a global render function:\n%s", webMain)
 	}
 	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
 	if err != nil {
@@ -146,7 +152,7 @@ func TestNewCommandUsesStableVersionWithoutLocalReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	modText := string(mod)
-	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.1.0") {
+	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.2.0") {
 		t.Fatalf("default mode should pin stable version, got:\n%s", mod)
 	}
 	if strings.Contains(modText, "github.com/erazemkos/goflex main") {
