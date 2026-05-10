@@ -2,6 +2,7 @@ package devserver
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -81,18 +83,19 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 type devServer struct {
-	dir         string
-	out         io.Writer
-	server      *http.Server
-	listener    net.Listener
-	broker      *broker
-	lastErr     atomic.Value
-	status      Status
-	statusMu    sync.Mutex
-	backendMu   sync.Mutex
-	backendCmd  *exec.Cmd
-	backendAddr string
-	done        chan error
+	dir          string
+	out          io.Writer
+	server       *http.Server
+	listener     net.Listener
+	broker       *broker
+	lastErr      atomic.Value
+	status       Status
+	statusMu     sync.Mutex
+	backendMu    sync.Mutex
+	backendCmd   *exec.Cmd
+	backendAddr  string
+	backendReady atomic.Bool // true only after the backend port accepts connections
+	done         chan error
 }
 
 func newServer(dir string, out io.Writer) *devServer {
@@ -116,7 +119,13 @@ func (s *devServer) start(ctx context.Context, addr string) error {
 	mux.HandleFunc("/_goflex/status.json", s.handleStatus)
 	mux.HandleFunc("/api", s.handleAPIProxy)
 	mux.HandleFunc("/api/", s.handleAPIProxy)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { serveApp(s.dir, w, r) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if shouldProxyHTML(s.dir, r) && s.backendReady.Load() {
+			s.proxyToBackend(w, r)
+			return
+		}
+		serveApp(s.dir, w, r)
+	})
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -211,16 +220,62 @@ func (s *devServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *devServer) handleAPIProxy(w http.ResponseWriter, r *http.Request) {
-	if s.backendAddr == "" || findServerEntry(s.dir) == "" {
-		http.NotFound(w, r)
+	if !s.backendReady.Load() {
+		http.Error(w, "backend not ready", http.StatusServiceUnavailable)
 		return
 	}
+	s.proxyToBackend(w, r)
+}
+
+func (s *devServer) proxyToBackend(w http.ResponseWriter, r *http.Request) {
 	target, err := url.Parse("http://" + s.backendAddr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	httputil.NewSingleHostReverseProxy(target).ServeHTTP(w, r)
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ModifyResponse = injectRuntimeIntoHTML
+	proxy.ServeHTTP(w, r)
+}
+
+// injectRuntimeIntoHTML rewrites HTML responses from the backend to include
+// the /_goflex/runtime.js script, which powers hot-reload and the error overlay.
+func injectRuntimeIntoHTML(resp *http.Response) error {
+	if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return err
+	}
+	body = injectRuntime(body)
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	resp.Header.Del("Transfer-Encoding")
+	return nil
+}
+
+// shouldProxyHTML returns true when a request to the dev server should be
+// forwarded to the user backend rather than served from the local dist/static
+// tree. It lets us keep /dist/* and /_goflex/* local while sending page
+// navigation ("/", "/about", etc.) to the app for server-rendered HTML.
+func shouldProxyHTML(dir string, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p := r.URL.Path
+	if strings.HasPrefix(p, "/_goflex/") || strings.HasPrefix(p, "/dist/") || strings.HasPrefix(p, "/assets/") {
+		return false
+	}
+	// Don't hijack requests that map to an existing local static file.
+	for _, full := range staticCandidates(dir, strings.TrimPrefix(filepath.Clean(p), "/")) {
+		if st, err := os.Stat(full); err == nil && !st.IsDir() && filepath.Base(full) != "index.html" {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *devServer) currentError() *BuildError {
@@ -458,10 +513,38 @@ func (s *devServer) rebuildServer(ctx context.Context) error {
 		_ = cmd.Wait()
 		cancel()
 	}()
+	if err := waitForBackend(ctx, s.backendAddr, 10*time.Second); err != nil {
+		return fmt.Errorf("backend did not become ready: %w", err)
+	}
+	s.backendReady.Store(true)
 	return nil
 }
 
+// waitForBackend polls addr until a TCP connection succeeds or the deadline
+// (or ctx) is exceeded. It is the only mechanism that gates requests on the
+// backend actually being ready to serve.
+func waitForBackend(ctx context.Context, addr string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for backend at %s", timeout, addr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func (s *devServer) stopBackend() {
+	s.backendReady.Store(false)
 	s.backendMu.Lock()
 	cmd := s.backendCmd
 	s.backendCmd = nil

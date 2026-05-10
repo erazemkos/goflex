@@ -5,10 +5,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	frontendbuild "github.com/erazemkos/goflex/internal/build"
 	"github.com/erazemkos/goflex/internal/devserver"
@@ -83,18 +87,31 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if !strings.Contains(stdout, "created GoFlex app myapp") {
 		t.Fatalf("stdout=%s", stdout)
 	}
-	for _, file := range []string{"go.mod", "index.html", "tailwind.config.css", "cmd/server/main.go", "cmd/web/main.go", "internal/web/app.go", "internal/api/greeting.go", "shared/types.go", "assets/.gitkeep"} {
+	for _, file := range []string{"go.mod", "index.html", "tailwind.config.css", "cmd/server/main.go", "cmd/web/main.go", "internal/web/ids.go", "internal/web/page.go", "internal/api/greeting.go", "shared/types.go", "assets/.gitkeep"} {
 		if _, err := os.Stat(filepath.Join(tmp, "myapp", file)); err != nil {
 			t.Fatalf("missing %s: %v", file, err)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(tmp, "myapp", "internal", "web", "app.go"))
+	ids, err := os.ReadFile(filepath.Join(tmp, "myapp", "internal", "web", "ids.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "Typed client + API demo") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
-		t.Fatalf("bad app template:\n%s", b)
+	if !strings.Contains(string(ids), "type ElementID string") || !strings.Contains(string(ids), "IDNameInput") {
+		t.Fatalf("bad ids template:\n%s", ids)
 	}
+	page, err := os.ReadFile(filepath.Join(tmp, "myapp", "internal", "web", "page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageText := string(page)
+	if !strings.HasPrefix(pageText, "//go:build !js\n") {
+		t.Fatalf("page.go must start with //go:build !js to keep gomponents out of the GopherJS bundle:\n%s", pageText)
+	}
+	if !strings.Contains(pageText, "maragu.dev/gomponents") || !strings.Contains(pageText, "Typed client + API demo") || !strings.Contains(pageText, "https://github.com/erazemkos/goflex") {
+		t.Fatalf("bad page template:\n%s", pageText)
+	}
+	b := pageText
+	_ = b
 	webMain, err := os.ReadFile(filepath.Join(tmp, "myapp", "cmd", "web", "main.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +127,7 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if !strings.Contains(modText, "module example.com/myapp") ||
 		!strings.Contains(modText, "github.com/erazemkos/goflex v0.0.0") ||
 		!strings.Contains(modText, "github.com/gopherjs/gopherjs v1.20.2") ||
+		!strings.Contains(modText, "maragu.dev/gomponents v1.3.0") ||
 		!strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
 		t.Fatalf("bad go.mod:\n%s", mod)
 	}
@@ -345,6 +363,201 @@ func TestSubcommandsExposeExpectedFlags(t *testing.T) {
 	mustFindFlag(t, root, []string{"db", "migrate"}, "auto")
 	mustFindFlag(t, root, []string{"db", "rollback"}, "step")
 	mustFindFlag(t, root, []string{"db", "status"}, "dsn")
+}
+
+// TestNewCommandGeneratedAppBuildsAndServes scaffolds a new app using the
+// --dev flag (the real framework-developer workflow), compiles it against
+// the local framework checkout, starts the server binary, and asserts that:
+//
+//   - GET /     returns gomponents-rendered HTML with expected content
+//   - GET /api/greeting?name=Pi  returns the typed JSON response
+//
+// The test is skipped in -short mode because it compiles real Go binaries.
+func TestNewCommandGeneratedAppBuildsAndServes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping generated-app integration test in -short mode")
+	}
+
+	// Find the framework root so the fake resolver can wire a local replace.
+	// This must happen before withCwd changes the working directory.
+	frameworkRoot := findFrameworkRoot(t)
+
+	// Intercept the --dev resolver so the test stays hermetic: instead of
+	// running `GOPROXY=direct go get github.com/erazemkos/goflex@main` it
+	// appends a local replace directive pointing at the current checkout.
+	// This faithfully exercises the --dev code path (the generated go.mod
+	// starts with no goflex require, just like --dev) while avoiding any
+	// network access or dependency on a published commit.
+	restore := fakeDevResolve(func(dir string, _, _ io.Writer) error {
+		modPath := filepath.Join(dir, "go.mod")
+		b, err := os.ReadFile(modPath)
+		if err != nil {
+			return err
+		}
+		updated := strings.TrimRight(string(b), "\n") + "\n\n" +
+			"require github.com/erazemkos/goflex v0.0.0\n\n" +
+			"replace github.com/erazemkos/goflex => " + filepath.ToSlash(frameworkRoot) + "\n"
+		return os.WriteFile(modPath, []byte(updated), 0o644)
+	})
+	defer restore()
+
+	tmp := t.TempDir()
+	withCwd(t, tmp)
+
+	stdout, stderr, code := runCLI("new", "myapp", "--dev")
+	if code != 0 {
+		t.Fatalf("new --dev code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Using latest goflex main branch via GOPROXY=direct...") {
+		t.Fatalf("expected --dev banner, got: %s", stdout)
+	}
+
+	appDir := filepath.Join(tmp, "myapp")
+	run := func(name string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(name, args...)
+		cmd.Dir = appDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+		}
+	}
+
+	run("go", "mod", "tidy")
+
+	// Compile the server binary.
+	serverBin := filepath.Join(tmp, "server-bin")
+	run("go", "build", "-o", serverBin, "./cmd/server")
+
+	// Verify the GopherJS entrypoint compiles as plain Go.
+	// This catches gomponents or other packages leaking into the JS bundle.
+	run("go", "build", "./cmd/web")
+
+	// Start the server on a free port.
+	port := freePort(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	srv := exec.CommandContext(ctx, serverBin)
+	srv.Dir = appDir
+	srv.Env = append(os.Environ(), "PORT="+port, "GOFLEX_ENV=test")
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Process.Kill(); _ = srv.Wait() })
+
+	base := "http://127.0.0.1:" + port
+	waitForHTTP(t, base+"/healthz", 10*time.Second)
+
+	// GET / must return gomponents-rendered HTML.
+	resp := mustGET(t, base+"/")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET / status=%d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	for _, want := range []string{
+		"<!doctype html>",
+		"<title>GoFlex</title>",
+		"/dist/app.js",
+		`id="increment"`,
+		`id="decrement"`,
+		`id="greeting"`,
+		"Typed client",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("GET / missing %q (first 600 bytes):\n%s", want, body[:min(600, len(body))])
+		}
+	}
+
+	// GET /api/greeting must return the shared DTO.
+	resp = mustGET(t, base+"/api/greeting?name=Pi")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/greeting status=%d", resp.StatusCode)
+	}
+	body = readBody(t, resp)
+	for _, want := range []string{`"message":"Hello, Pi!"`, `"length":2`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("GET /api/greeting missing %q in: %s", want, body)
+		}
+	}
+}
+
+// ---- helpers used only by the integration test ----
+
+func findFrameworkRoot(t *testing.T) string {
+	t.Helper()
+	// Prefer the environment variable (set by CI or the developer).
+	if p := os.Getenv("GOFLEX_FRAMEWORK_PATH"); p != "" {
+		return p
+	}
+	// Fall back to walking up from the current working directory, which is the
+	// package directory when `go test ./internal/cli` is invoked directly.
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for dir := wd; ; dir = filepath.Dir(dir) {
+		if b, e := os.ReadFile(filepath.Join(dir, "go.mod")); e == nil &&
+			strings.Contains(string(b), "module github.com/erazemkos/goflex") {
+			return dir
+		}
+		if filepath.Dir(dir) == dir {
+			t.Skip("cannot locate framework root; set GOFLEX_FRAMEWORK_PATH")
+		}
+	}
+	return ""
+}
+
+func freePort(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	_ = ln.Close()
+	return port
+}
+
+func waitForHTTP(t *testing.T, url string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url) //nolint:gosec
+		if err == nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			return
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("server at %s did not become ready within %s", url, timeout)
+}
+
+func mustGET(t *testing.T, url string) *http.Response {
+	t.Helper()
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	return resp
+}
+
+func readBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func fakeDevResolve(fn func(string, io.Writer, io.Writer) error) func() {

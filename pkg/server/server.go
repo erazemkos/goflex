@@ -33,6 +33,7 @@ type Config struct {
 	Env            string
 	StaticFS       fs.FS
 	IndexPath      string
+	IndexHTML      []byte // When set, served for all browser HTML page requests instead of reading IndexPath from StaticFS.
 	APIPrefix      string
 	CORSOrigins    []string
 	TrustedProxies []string
@@ -84,6 +85,14 @@ func (s *Server) API(prefix string, fn func(r *gin.RouterGroup)) {
 }
 
 func (s *Server) Static(fsys fs.FS) { s.cfg.StaticFS = fsys }
+
+// Engine returns the underlying Gin engine for registering custom routes
+// outside the API prefix (for example, server-rendered HTML pages).
+func (s *Server) Engine() *gin.Engine { return s.engine }
+
+// GET registers a GET handler at the given path on the root engine,
+// bypassing the API prefix. Use this for server-rendered HTML pages.
+func (s *Server) GET(path string, h gin.HandlerFunc) { s.engine.GET(path, h) }
 
 func (s *Server) Run(addr string) error {
 	if addr == "" {
@@ -216,8 +225,12 @@ func (s *Server) noRoute(c *gin.Context) {
 		if name == "" || name == "." {
 			name = s.cfg.IndexPath
 		}
-		if s.tryWriteStatic(c, name) {
-			return
+		// When IndexHTML is explicitly set, let it win for the index page;
+		// still serve other static assets (app.js, app.css …) from StaticFS.
+		if !(name == s.cfg.IndexPath && len(s.cfg.IndexHTML) > 0) {
+			if s.tryWriteStatic(c, name) {
+				return
+			}
 		}
 	}
 	if looksAsset(p) {
@@ -225,6 +238,11 @@ func (s *Server) noRoute(c *gin.Context) {
 		return
 	}
 	if acceptsHTML(c) {
+		if len(s.cfg.IndexHTML) > 0 {
+			c.Header("Cache-Control", "no-cache")
+			c.Data(http.StatusOK, "text/html; charset=utf-8", s.cfg.IndexHTML)
+			return
+		}
 		if s.cfg.StaticFS != nil {
 			if b, err := fs.ReadFile(s.cfg.StaticFS, s.cfg.IndexPath); err == nil {
 				c.Header("Cache-Control", "no-cache")

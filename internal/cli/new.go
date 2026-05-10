@@ -116,7 +116,8 @@ func scaffoldNewApp(cfg NewConfig) error {
 		"tailwind.config.css":      tailwindTemplate,
 		"cmd/server/main.go":       serverMainTemplate(module),
 		"cmd/web/main.go":          webMainTemplate(module),
-		"internal/web/app.go":      webAppTemplate,
+		"internal/web/ids.go":      webIDsTemplate,
+		"internal/web/page.go":     webPageTemplate,
 		"internal/api/greeting.go": apiTemplate(module),
 		"shared/types.go":          sharedTypesTemplate,
 		"assets/.gitkeep":          "",
@@ -142,6 +143,7 @@ func writeScaffoldFile(path, content string) error {
 }
 
 const gopherJSRuntimeVersion = "v1.20.2"
+const gomponentsVersion = "v1.3.0"
 
 func goModTemplate(module string, dev bool) string {
 	var b strings.Builder
@@ -152,7 +154,10 @@ func goModTemplate(module string, dev bool) string {
 		// immediately runs `GOPROXY=direct go get github.com/erazemkos/goflex@main`,
 		// which adds the resolved pseudo-version. Keeping a placeholder here would
 		// make Go try to resolve v0.0.0 first and fail before `go get` runs.
-		fmt.Fprintf(&b, "require github.com/gopherjs/gopherjs %s\n", gopherJSRuntimeVersion)
+		b.WriteString("require (\n")
+		fmt.Fprintf(&b, "\tgithub.com/gopherjs/gopherjs %s\n", gopherJSRuntimeVersion)
+		fmt.Fprintf(&b, "\tmaragu.dev/gomponents %s\n", gomponentsVersion)
+		b.WriteString(")\n")
 		return b.String()
 	}
 	var replace, version string
@@ -165,6 +170,7 @@ func goModTemplate(module string, dev bool) string {
 	b.WriteString("require (\n")
 	fmt.Fprintf(&b, "\tgithub.com/erazemkos/goflex %s\n", version)
 	fmt.Fprintf(&b, "\tgithub.com/gopherjs/gopherjs %s\n", gopherJSRuntimeVersion)
+	fmt.Fprintf(&b, "\tmaragu.dev/gomponents %s\n", gomponentsVersion)
 	b.WriteString(")\n")
 	if replace != "" {
 		fmt.Fprintf(&b, "\nreplace github.com/erazemkos/goflex => %s\n", filepath.ToSlash(replace))
@@ -219,7 +225,6 @@ type appState struct {
 
 func main() {
 	state := &appState{name: "Gopher"}
-	byID(web.IDRoot).Set("innerHTML", web.Page())
 
 	byID(web.IDIncrement).Call("addEventListener", "click", func() {
 		state.count++
@@ -344,11 +349,16 @@ import (
 	"os"
 
 	"%s/internal/api"
+	"%s/internal/web"
 	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func main() {
-	app := server.New(server.Config{Env: env(), StaticFS: staticFS()})
+	app := server.New(server.Config{
+		Env:       env(),
+		StaticFS:  staticFS(),
+		IndexHTML: []byte(web.Shell()),
+	})
 	app.API("", api.RegisterRoutes)
 	addr := ":8080"
 	if port := os.Getenv("PORT"); port != "" {
@@ -368,17 +378,20 @@ func staticFS() fs.FS {
 	if _, err := os.Stat("dist"); err == nil {
 		return os.DirFS("dist")
 	}
-	return os.DirFS(".")
+	return nil
 }
-`, module)
+`, module, module)
 }
 
-const webAppTemplate = `package web
+const webIDsTemplate = `package web
 
+// ElementID is the typed selector for every DOM node the browser-side Go code
+// touches. Keep the frontend and the template in sync by editing the constants
+// below instead of stringly-typed IDs. This file is compiled by both the
+// backend server (Go) and the browser entrypoint (GopherJS).
 type ElementID string
 
 const (
-	IDRoot         ElementID = "root"
 	IDIncrement    ElementID = "increment"
 	IDDecrement    ElementID = "decrement"
 	IDReset        ElementID = "reset"
@@ -390,116 +403,101 @@ const (
 	IDAPIPath      ElementID = "api-path"
 	IDNameLength   ElementID = "name-length"
 )
-
-type Attr struct{ name, value string }
-type Node struct {
-	tag      string
-	text     string
-	attrs    []Attr
-	children []Node
-}
-
-func Page() string {
-	return Main(A("class", "min-h-screen bg-slate-950 text-white"),
-		Section(A("class", "mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center gap-8 px-6 py-12"),
-			Div(A("class", "text-center"),
-				P(A("class", "mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-blue-300"), Text("GoFlex starter")),
-				H1(A("class", "text-5xl font-bold tracking-tight sm:text-6xl"), Text("GoFlex")),
-				P(A("class", "mt-5 max-w-2xl text-lg text-slate-300"), Text("A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.")),
-			),
-			Div(A("class", "w-full rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-blue-950/40 backdrop-blur"),
-				Div(A("class", "mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"),
-					Div(nil,
-						P(A("class", "text-sm font-semibold uppercase tracking-[0.25em] text-blue-300"), Text("Typed client + API demo")),
-						H2(A("class", "mt-2 text-2xl font-bold"), Text("Everything below is compiled Go")),
-					),
-					Link("https://github.com/erazemkos/goflex", A("class", "text-sm font-semibold text-blue-300 hover:text-blue-200"), Text("View on GitHub →")),
-				),
-				Div(A("class", "grid gap-4 md:grid-cols-2"),
-					CounterCard(),
-					APICard(),
-				),
-			),
-		),
-	).HTML()
-}
-
-func CounterCard() Node {
-	return Div(A("class", "rounded-2xl bg-slate-900/80 p-5"),
-		P(A("class", "text-sm text-slate-400"), Text("Typed selectors + local client state")),
-		Div(A("class", "my-5 flex items-center justify-center gap-4"),
-			Button(ID(IDDecrement), A("class", "h-12 w-12 rounded-full bg-slate-800 text-2xl font-bold hover:bg-slate-700"), Text("−")),
-			Div(ID(IDCount), A("class", "min-w-20 text-center text-6xl font-black text-blue-300"), Text("0")),
-			Button(ID(IDIncrement), A("class", "h-12 w-12 rounded-full bg-blue-500 text-2xl font-bold hover:bg-blue-400"), Text("+")),
-		),
-		P(ID(IDClickSummary), A("class", "text-center text-slate-300"), A("aria-live", "polite"), Text("You clicked 0 times.")),
-		P(A("class", "mt-2 text-center text-sm text-slate-500"), Text("Derived value: "), Span(ID(IDDoubleCount), Text("0"))),
-		Button(ID(IDReset), A("class", "mt-5 w-full rounded-xl border border-white/10 px-4 py-2 font-semibold text-slate-200 hover:bg-white/10"), Text("Reset")),
-	)
-}
-
-func APICard() Node {
-	return Div(A("class", "rounded-2xl bg-slate-900/80 p-5"),
-		Label(IDFor(IDNameInput), A("class", "text-sm text-slate-400"), Text("Typed DTO shared by frontend and backend")),
-		Input(ID(IDNameInput), A("value", "Gopher"), A("class", "mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none ring-blue-400/30 focus:ring-4")),
-		P(ID(IDGreeting), A("class", "mt-6 text-3xl font-bold text-white"), A("aria-live", "polite"), Text("Loading typed API response…")),
-		P(A("class", "mt-3 text-slate-400"), Text("The browser imports shared.GreetingResponse and calls "), Code(ID(IDAPIPath), Text("/api/greeting")), Text(". Name length from the typed response: "), Span(ID(IDNameLength), A("class", "font-semibold text-blue-300"), Text("0")), Text(".")),
-	)
-}
-
-func A(name, value string) Attr { return Attr{name: name, value: value} }
-func ID(id ElementID) Attr      { return A("id", string(id)) }
-func IDFor(id ElementID) Attr   { return A("for", string(id)) }
-
-func Text(value string) Node { return Node{text: value} }
-func El(tag string, args ...any) Node {
-	node := Node{tag: tag}
-	for _, arg := range args {
-		switch v := arg.(type) {
-		case nil:
-		case Attr:
-			node.attrs = append(node.attrs, v)
-		case Node:
-			node.children = append(node.children, v)
-		case string:
-			node.children = append(node.children, Text(v))
-		}
-	}
-	return node
-}
-
-func Main(args ...any) Node    { return El("main", args...) }
-func Section(args ...any) Node { return El("section", args...) }
-func Div(args ...any) Node     { return El("div", args...) }
-func P(args ...any) Node       { return El("p", args...) }
-func H1(args ...any) Node      { return El("h1", args...) }
-func H2(args ...any) Node      { return El("h2", args...) }
-func Span(args ...any) Node    { return El("span", args...) }
-func Code(args ...any) Node    { return El("code", args...) }
-func Label(args ...any) Node   { return El("label", args...) }
-func Button(args ...any) Node  { return El("button", args...) }
-func Input(args ...any) Node   { return El("input", args...) }
-func Link(href string, args ...any) Node {
-	return El("a", append([]any{A("href", href)}, args...)...)
-}
-
-func (n Node) HTML() string {
-	if n.tag == "" {
-		return n.text
-	}
-	out := "<" + n.tag
-	for _, attr := range n.attrs {
-		out += " " + attr.name + "=\"" + attr.value + "\""
-	}
-	out += ">"
-	for _, child := range n.children {
-		out += child.HTML()
-	}
-	out += "</" + n.tag + ">"
-	return out
-}
 `
 
+// webPageTemplate contains the gomponents-based HTML renderer. It is guarded
+// by //go:build !js so it is only compiled for the backend binary -
+// gomponents depends on html/template, which is not supported by GopherJS.
+const webPageTemplate = `//go:build !js
+
+package web
+
+import (
+	"bytes"
+
+	g "maragu.dev/gomponents"
+	. "maragu.dev/gomponents/components"
+	. "maragu.dev/gomponents/html"
+)
+
+func id(v ElementID) g.Node    { return ID(string(v)) }
+func forID(v ElementID) g.Node { return For(string(v)) }
+
+// Shell renders the full HTML document served at "/". The client entrypoint
+// (compiled by GopherJS) attaches event listeners to the elements below and
+// updates their text nodes in place, so there is no client-side templating.
+func Shell() string {
+	var buf bytes.Buffer
+	_ = HTML5(HTML5Props{
+		Title:    "GoFlex",
+		Language: "en",
+		Head: []g.Node{
+			Link(Rel("stylesheet"), Href("/dist/app.css")),
+		},
+		Body: []g.Node{
+			page(),
+			Script(Src("/dist/app.js")),
+		},
+	}).Render(&buf)
+	return buf.String()
+}
+
+// Page renders just the <main> content. Useful for tests and for embedding the
+// starter page inside a custom shell.
+func Page() string {
+	var buf bytes.Buffer
+	_ = page().Render(&buf)
+	return buf.String()
+}
+
+func page() g.Node {
+	return Main(Class("min-h-screen bg-slate-950 text-white"),
+		Section(Class("mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center gap-8 px-6 py-12"),
+			Div(Class("text-center"),
+				P(Class("mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-blue-300"), g.Text("GoFlex starter")),
+				H1(Class("text-5xl font-bold tracking-tight sm:text-6xl"), g.Text("GoFlex")),
+				P(Class("mt-5 max-w-2xl text-lg text-slate-300"), g.Text("A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.")),
+			),
+			Div(Class("w-full rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-blue-950/40 backdrop-blur"),
+				Div(Class("mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"),
+					Div(
+						P(Class("text-sm font-semibold uppercase tracking-[0.25em] text-blue-300"), g.Text("Typed client + API demo")),
+						H2(Class("mt-2 text-2xl font-bold"), g.Text("Everything below is compiled Go")),
+					),
+					A(Href("https://github.com/erazemkos/goflex"), Class("text-sm font-semibold text-blue-300 hover:text-blue-200"), g.Text("View on GitHub →")),
+				),
+				Div(Class("grid gap-4 md:grid-cols-2"),
+					counterCard(),
+					apiCard(),
+				),
+			),
+		),
+	)
+}
+
+func counterCard() g.Node {
+	return Div(Class("rounded-2xl bg-slate-900/80 p-5"),
+		P(Class("text-sm text-slate-400"), g.Text("Typed selectors + local client state")),
+		Div(Class("my-5 flex items-center justify-center gap-4"),
+			Button(id(IDDecrement), Class("h-12 w-12 rounded-full bg-slate-800 text-2xl font-bold hover:bg-slate-700"), g.Text("−")),
+			Div(id(IDCount), Class("min-w-20 text-center text-6xl font-black text-blue-300"), g.Text("0")),
+			Button(id(IDIncrement), Class("h-12 w-12 rounded-full bg-blue-500 text-2xl font-bold hover:bg-blue-400"), g.Text("+")),
+		),
+		P(id(IDClickSummary), Class("text-center text-slate-300"), Aria("live", "polite"), g.Text("You clicked 0 times.")),
+		P(Class("mt-2 text-center text-sm text-slate-500"), g.Text("Derived value: "), Span(id(IDDoubleCount), g.Text("0"))),
+		Button(id(IDReset), Class("mt-5 w-full rounded-xl border border-white/10 px-4 py-2 font-semibold text-slate-200 hover:bg-white/10"), g.Text("Reset")),
+	)
+}
+
+func apiCard() g.Node {
+	return Div(Class("rounded-2xl bg-slate-900/80 p-5"),
+		Label(forID(IDNameInput), Class("text-sm text-slate-400"), g.Text("Typed DTO shared by frontend and backend")),
+		Input(id(IDNameInput), Value("Gopher"), Class("mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none ring-blue-400/30 focus:ring-4")),
+		P(id(IDGreeting), Class("mt-6 text-3xl font-bold text-white"), Aria("live", "polite"), g.Text("Loading typed API response…")),
+		P(Class("mt-3 text-slate-400"), g.Text("The browser imports shared.GreetingResponse and calls "), Code(id(IDAPIPath), g.Text("/api/greeting")), g.Text(". Name length from the typed response: "), Span(id(IDNameLength), Class("font-semibold text-blue-300"), g.Text("0")), g.Text(".")),
+	)
+}
+`
 const sharedTypesTemplate = `package shared
 
 const GreetingPath = "/greeting"
