@@ -97,7 +97,10 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(mod), "module example.com/myapp") || !strings.Contains(string(mod), "replace github.com/erazemkos/goflex =>") {
+	modText := string(mod)
+	if !strings.Contains(modText, "module example.com/myapp") ||
+		!strings.Contains(modText, "require github.com/erazemkos/goflex v0.1.0") ||
+		!strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
 		t.Fatalf("bad go.mod:\n%s", mod)
 	}
 }

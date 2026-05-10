@@ -100,12 +100,14 @@ func writeScaffoldFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
+const frameworkVersion = "v0.1.0"
+
 func goModTemplate(module string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "module %s\n\n", module)
-	b.WriteString("go 1.23\n")
+	b.WriteString("go 1.23\n\n")
+	fmt.Fprintf(&b, "require github.com/erazemkos/goflex %s\n", frameworkVersion)
 	if replace := localFrameworkReplace(); replace != "" {
-		b.WriteString("\nrequire github.com/erazemkos/goflex v0.0.0\n")
 		fmt.Fprintf(&b, "\nreplace github.com/erazemkos/goflex => %s\n", filepath.ToSlash(replace))
 	}
 	return b.String()
