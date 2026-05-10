@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,17 +47,9 @@ func TestUnknownCommandReturnsUsageError(t *testing.T) {
 }
 
 func TestStubsRunAndVersionPrints(t *testing.T) {
-	stdout, stderr, code := runCLI("new", "x")
-	if code != 0 {
-		t.Fatalf("new code=%d stderr=%s", code, stderr)
-	}
-	if !strings.Contains(stdout, "not yet implemented") {
-		t.Fatalf("new stdout=%s", stdout)
-	}
-
 	restoreDev := fakeDevForTest()
 	defer restoreDev()
-	stdout, stderr, code = runCLI("dev")
+	stdout, stderr, code := runCLI("dev")
 	if code != 0 {
 		t.Fatalf("dev code=%d stderr=%s", code, stderr)
 	}
@@ -70,6 +63,57 @@ func TestStubsRunAndVersionPrints(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) == "" || strings.Contains(stdout, "not yet implemented") {
 		t.Fatalf("bad version stdout=%q", stdout)
+	}
+}
+
+func TestNewCommandScaffoldsBasicApp(t *testing.T) {
+	tmp := t.TempDir()
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOFLEX_FRAMEWORK_PATH", root)
+	withCwd(t, tmp)
+	stdout, stderr, code := runCLI("new", "myapp", "--module", "example.com/myapp")
+	if code != 0 {
+		t.Fatalf("new code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "created GoFlex app myapp") {
+		t.Fatalf("stdout=%s", stdout)
+	}
+	for _, file := range []string{"go.mod", "index.html", "tailwind.config.css", "cmd/server/main.go", "cmd/web/main.go", "internal/web/app.go", "assets/.gitkeep"} {
+		if _, err := os.Stat(filepath.Join(tmp, "myapp", file)); err != nil {
+			t.Fatalf("missing %s: %v", file, err)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(tmp, "myapp", "internal", "web", "app.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
+		t.Fatalf("bad app template:\n%s", b)
+	}
+	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mod), "module example.com/myapp") || !strings.Contains(string(mod), "replace github.com/goflex/goflex =>") {
+		t.Fatalf("bad go.mod:\n%s", mod)
+	}
+}
+
+func TestNewCommandRejectsNonEmptyDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	withCwd(t, tmp)
+	if err := os.Mkdir("myapp", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("myapp", "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := runCLI("new", "myapp")
+	if code == 0 || !strings.Contains(stderr, "not empty") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
 	}
 }
 
@@ -259,6 +303,18 @@ func fakeDBForTest() func() {
 	return func() {
 		runDBCreate, runDBMigrate, runDBRollback, runDBStatus = oldCreate, oldMigrate, oldRollback, oldStatus
 	}
+}
+
+func withCwd(t *testing.T, dir string) {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
 }
 
 func runCLI(args ...string) (string, string, int) {

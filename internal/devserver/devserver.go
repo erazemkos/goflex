@@ -363,7 +363,7 @@ func (s *devServer) rebuild(ctx context.Context, paths []string) {
 		s.inc(func(st *Status) { st.Restarts++ })
 	}
 	if kind&changeFrontend != 0 {
-		if _, err := buildFrontend(ctx, frontendbuild.Options{Entry: s.dir, OutDir: filepath.Join(s.dir, "dist"), SourceMap: true}); err != nil {
+		if _, err := buildFrontend(ctx, frontendbuild.Options{Entry: frontendbuild.FrontendEntry(s.dir), OutDir: filepath.Join(s.dir, "dist"), SourceMap: true}); err != nil {
 			s.setError(err)
 			return
 		}

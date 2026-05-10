@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -18,7 +21,12 @@ func newCmd() *cobra.Command {
 				cfg.Module = filepath.Base(filepath.Clean(cfg.Name))
 			}
 			lastNew = cfg
-			return printStub(cmd, "new", 2)
+			if err := scaffoldNewApp(cfg); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created GoFlex app %s\n\n", cfg.Name)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Next steps:\n  cd %s\n  go mod tidy\n  goflex dev\n", cfg.Name)
+			return nil
 		},
 	}
 	newFlags(cmd, &cfg)
@@ -28,4 +36,212 @@ func newCmd() *cobra.Command {
 func newFlags(cmd *cobra.Command, cfg *NewConfig) {
 	cmd.Flags().StringVar(&cfg.Template, "template", "default", "template name")
 	cmd.Flags().StringVar(&cfg.Module, "module", "", "module path")
+}
+
+func scaffoldNewApp(cfg NewConfig) error {
+	if cfg.Template != "default" && cfg.Template != "basic" {
+		return fmt.Errorf("unknown template %q", cfg.Template)
+	}
+	target := filepath.Clean(cfg.Name)
+	if target == "." || target == string(filepath.Separator) {
+		return fmt.Errorf("invalid project name %q", cfg.Name)
+	}
+	if st, err := os.Stat(target); err == nil {
+		if !st.IsDir() {
+			return fmt.Errorf("%s already exists and is not a directory", target)
+		}
+		entries, err := os.ReadDir(target)
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			return fmt.Errorf("%s already exists and is not empty", target)
+		}
+	} else if os.IsNotExist(err) {
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	module := strings.TrimSpace(cfg.Module)
+	if module == "" {
+		module = filepath.Base(target)
+	}
+	files := map[string]string{
+		"go.mod":                goModTemplate(module),
+		"README.md":             appReadmeTemplate(module),
+		"index.html":            indexHTMLTemplate,
+		"tailwind.config.css":   tailwindTemplate,
+		"cmd/server/main.go":    serverMainTemplate,
+		"cmd/web/main.go":       webMainTemplate(module),
+		"internal/web/app.go":   webAppTemplate,
+		"assets/.gitkeep":       "",
+		"shared/.gitkeep":       "",
+		"internal/api/.gitkeep": "",
+	}
+	for rel, content := range files {
+		if err := writeScaffoldFile(filepath.Join(target, rel), content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeScaffoldFile(path, content string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("refusing to overwrite %s", path)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func goModTemplate(module string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "module %s\n\n", module)
+	b.WriteString("go 1.23\n\n")
+	b.WriteString("require github.com/goflex/goflex v0.0.0\n")
+	if replace := localFrameworkReplace(); replace != "" {
+		fmt.Fprintf(&b, "\nreplace github.com/goflex/goflex => %s\n", filepath.ToSlash(replace))
+	}
+	return b.String()
+}
+
+func localFrameworkReplace() string {
+	if p := strings.TrimSpace(os.Getenv("GOFLEX_FRAMEWORK_PATH")); p != "" {
+		if abs, err := filepath.Abs(p); err == nil && isFrameworkRoot(abs) {
+			return abs
+		}
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if isFrameworkRoot(wd) {
+			return wd
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			return ""
+		}
+		wd = parent
+	}
+}
+
+func isFrameworkRoot(dir string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	return err == nil && strings.Contains(string(b), "module github.com/goflex/goflex")
+}
+
+func webMainTemplate(module string) string {
+	return fmt.Sprintf(`package main
+
+import (
+	"%s/internal/web"
+	"github.com/goflex/goflex/pkg/ui"
+)
+
+func main() {
+	ui.Render(web.App(), nil)
+}
+`, module)
+}
+
+const serverMainTemplate = `package main
+
+import (
+	"io/fs"
+	"log"
+	"os"
+
+	"github.com/goflex/goflex/pkg/server"
+)
+
+func main() {
+	app := server.New(server.Config{Env: env(), StaticFS: staticFS()})
+	addr := ":8080"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
+	log.Fatal(app.Run(addr))
+}
+
+func env() string {
+	if v := os.Getenv("GOFLEX_ENV"); v != "" {
+		return v
+	}
+	return "dev"
+}
+
+func staticFS() fs.FS {
+	if _, err := os.Stat("dist"); err == nil {
+		return os.DirFS("dist")
+	}
+	return os.DirFS(".")
+}
+`
+
+const webAppTemplate = `package web
+
+import "github.com/goflex/goflex/pkg/ui"
+
+func App() ui.Element {
+	return ui.Div(
+		ui.Class("min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950 text-white p-8"),
+		ui.H1(ui.Class("text-5xl font-bold tracking-tight"), ui.Text("GoFlex")),
+		ui.P(ui.Class("max-w-xl text-center text-lg text-slate-300"), ui.Text("A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.")),
+		ui.A(
+			ui.Href("https://github.com/erazemkos/goflex"),
+			ui.Class("rounded bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-600"),
+			ui.Text("View on GitHub"),
+		),
+	)
+}
+`
+
+const indexHTMLTemplate = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GoFlex App</title>
+    <link rel="stylesheet" href="/dist/app.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="/dist/app.js"></script>
+  </body>
+</html>
+`
+
+const tailwindTemplate = `@import "tailwindcss";
+@source "./**/*.go";
+`
+
+func appReadmeTemplate(module string) string {
+	return fmt.Sprintf(`# %s
+
+A basic GoFlex app.
+
+## Run
+
+`+"```sh"+`
+go mod tidy
+goflex dev
+`+"```"+`
+
+Open the URL printed by `+"`goflex dev`"+`.
+
+## Build
+
+`+"```sh"+`
+goflex build --out ./bin/app
+PORT=8080 ./bin/app
+`+"```"+`
+`, module)
 }

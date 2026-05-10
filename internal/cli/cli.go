@@ -57,11 +57,6 @@ func requireArgs(n int) cobra.PositionalArgs {
 	}
 }
 
-func printStub(cmd *cobra.Command, command string, step int) error {
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "goflex %s: not yet implemented (step %02d)\n", command, step)
-	return nil
-}
-
 type NewConfig struct{ Name, Template, Module string }
 type DevConfig struct {
 	Addr   string

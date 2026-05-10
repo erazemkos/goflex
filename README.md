@@ -41,6 +41,17 @@ make e2e
 
 ## Quick start
 
+Scaffold a basic app:
+
+```sh
+goflex new myapp --module example.com/myapp
+cd myapp
+go mod tidy
+goflex dev
+```
+
+The generated app renders a GoFlex title and a link to the GitHub repository.
+
 Run the reference todo server:
 
 ```sh

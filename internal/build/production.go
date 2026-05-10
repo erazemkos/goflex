@@ -84,7 +84,7 @@ func BuildDist(ctx context.Context, opts ProductionOptions) (DistResult, error) 
 	if err := os.MkdirAll(dist, 0o755); err != nil {
 		return DistResult{}, err
 	}
-	if _, err := productionBuildFrontend(ctx, Options{Entry: dir, OutDir: dist, Minify: true, SourceMap: false}); err != nil {
+	if _, err := productionBuildFrontend(ctx, Options{Entry: FrontendEntry(dir), OutDir: dist, Minify: true, SourceMap: false}); err != nil {
 		return DistResult{}, err
 	}
 	if err := productionBuildCSS(CSSOptions{Dir: dir, Out: filepath.Join(dist, "app.css"), Minify: true}); err != nil {

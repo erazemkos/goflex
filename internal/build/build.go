@@ -50,6 +50,18 @@ var gopherJSVersion = func(ctx context.Context) (string, error) {
 	return string(b), err
 }
 
+// FrontendEntry returns the conventional GopherJS frontend package for an app.
+func FrontendEntry(dir string) string {
+	if dir == "" {
+		dir = "."
+	}
+	candidate := filepath.Join(dir, "cmd", "web")
+	if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+		return candidate
+	}
+	return dir
+}
+
 // Build compiles opts.Entry into opts.OutDir/app.js using the gopherjs binary.
 func Build(ctx context.Context, opts Options) (Artifacts, error) {
 	if opts.Entry == "" {
