@@ -16,7 +16,7 @@ import (
 	"unicode"
 )
 
-const apiImportPath = "github.com/goflex/goflex/pkg/api"
+const apiImportPath = "github.com/erazemkos/goflex/pkg/api"
 
 type endpointDecl struct {
 	Name        string
@@ -316,8 +316,8 @@ func renderServer(endpoints []endpointDecl) []byte {
 	b.WriteString("import (\n")
 	b.WriteString("\t\"net/http\"\n\n")
 	b.WriteString("\t\"github.com/gin-gonic/gin\"\n")
-	b.WriteString("\t\"github.com/goflex/goflex/pkg/api\"\n")
-	b.WriteString("\t\"github.com/goflex/goflex/pkg/httperr\"\n")
+	b.WriteString("\t\"github.com/erazemkos/goflex/pkg/api\"\n")
+	b.WriteString("\t\"github.com/erazemkos/goflex/pkg/httperr\"\n")
 	writeEndpointImports(&b, endpoints)
 	b.WriteString(")\n\n")
 	b.WriteString("func RegisterRoutes(r *gin.Engine) {\n")
@@ -366,7 +366,7 @@ func renderClient(endpoints []endpointDecl) []byte {
 	}
 	b.WriteString("import (\n")
 	b.WriteString("\t\"context\"\n\n")
-	b.WriteString("\t\"github.com/goflex/goflex/pkg/apiclient\"\n")
+	b.WriteString("\t\"github.com/erazemkos/goflex/pkg/apiclient\"\n")
 	writeEndpointImports(&b, endpoints)
 	b.WriteString(")\n\n")
 	for _, ep := range endpoints {

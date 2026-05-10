@@ -1,4 +1,4 @@
-module github.com/goflex/goflex/examples/hello
+module github.com/erazemkos/goflex/examples/hello
 
 go 1.20
 

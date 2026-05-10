@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goflex/goflex/pkg/api"
+	"github.com/erazemkos/goflex/pkg/api"
 )
 
 type req struct {

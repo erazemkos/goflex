@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goflex/goflex/pkg/server"
+	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func TestCopyAssetsFingerprintsAndServerCaches(t *testing.T) {

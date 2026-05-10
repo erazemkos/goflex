@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func TestExactRouteMatches(t *testing.T) {

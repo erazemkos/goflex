@@ -5,8 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	frontendbuild "github.com/goflex/goflex/internal/build"
-	"github.com/goflex/goflex/internal/devserver"
+	frontendbuild "github.com/erazemkos/goflex/internal/build"
+	"github.com/erazemkos/goflex/internal/devserver"
 	"github.com/spf13/cobra"
 )
 

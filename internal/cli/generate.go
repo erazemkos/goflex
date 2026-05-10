@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goflex/goflex/internal/gen"
+	"github.com/erazemkos/goflex/internal/gen"
 )
 
 var runGenerate = gen.Generate

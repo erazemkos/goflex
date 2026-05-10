@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func TestUseStateBasic(t *testing.T) {

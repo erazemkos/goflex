@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	glog "github.com/goflex/goflex/pkg/log"
+	glog "github.com/erazemkos/goflex/pkg/log"
 )
 
 type usageError struct{ err error }

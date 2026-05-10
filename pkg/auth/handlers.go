@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erazemkos/goflex/pkg/httperr"
 	"github.com/gin-gonic/gin"
-	"github.com/goflex/goflex/pkg/httperr"
 )
 
 type Credentials struct {

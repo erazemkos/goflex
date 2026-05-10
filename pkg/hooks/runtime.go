@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 type hookSlot struct {

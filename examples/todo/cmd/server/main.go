@@ -9,11 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/goflex/goflex/examples/todo/internal/api"
-	"github.com/goflex/goflex/examples/todo/internal/models"
-	"github.com/goflex/goflex/pkg/auth"
-	"github.com/goflex/goflex/pkg/db"
-	"github.com/goflex/goflex/pkg/server"
+	"github.com/erazemkos/goflex/examples/todo/internal/api"
+	"github.com/erazemkos/goflex/examples/todo/internal/models"
+	"github.com/erazemkos/goflex/pkg/auth"
+	"github.com/erazemkos/goflex/pkg/db"
+	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func main() {

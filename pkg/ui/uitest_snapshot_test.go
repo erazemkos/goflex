@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goflex/goflex/internal/uitest"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/internal/uitest"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func TestRenderToMockRuntimeSnapshot(t *testing.T) {

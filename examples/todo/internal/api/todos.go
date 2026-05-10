@@ -8,11 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/goflex/goflex/examples/todo/shared"
-	flexapi "github.com/goflex/goflex/pkg/api"
-	"github.com/goflex/goflex/pkg/auth"
-	"github.com/goflex/goflex/pkg/form"
-	"github.com/goflex/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/examples/todo/shared"
+	flexapi "github.com/erazemkos/goflex/pkg/api"
+	"github.com/erazemkos/goflex/pkg/auth"
+	"github.com/erazemkos/goflex/pkg/form"
+	"github.com/erazemkos/goflex/pkg/httperr"
 )
 
 type Store interface {

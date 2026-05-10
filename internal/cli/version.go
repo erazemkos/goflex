@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goflex/goflex/pkg/version"
+	"github.com/erazemkos/goflex/pkg/version"
 )
 
 func versionCmd() *cobra.Command {

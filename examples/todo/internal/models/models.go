@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goflex/goflex/examples/todo/shared"
+	"github.com/erazemkos/goflex/examples/todo/shared"
 	"gorm.io/gorm"
 )
 

@@ -23,14 +23,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appapi "github.com/goflex/goflex/examples/todo/internal/api"
-	"github.com/goflex/goflex/examples/todo/internal/models"
-	"github.com/goflex/goflex/examples/todo/shared"
-	"github.com/goflex/goflex/pkg/auth"
-	"github.com/goflex/goflex/pkg/db"
-	"github.com/goflex/goflex/pkg/httperr"
-	"github.com/goflex/goflex/pkg/query"
-	"github.com/goflex/goflex/pkg/server"
+	appapi "github.com/erazemkos/goflex/examples/todo/internal/api"
+	"github.com/erazemkos/goflex/examples/todo/internal/models"
+	"github.com/erazemkos/goflex/examples/todo/shared"
+	"github.com/erazemkos/goflex/pkg/auth"
+	"github.com/erazemkos/goflex/pkg/db"
+	"github.com/erazemkos/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/query"
+	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func TestSignupLoginLogoutAndRefreshFlow(t *testing.T) {
@@ -390,7 +390,7 @@ func TestFrameworkPackageCoverageMeta(t *testing.T) {
 			return nil
 		}
 		for pkg := range wanted {
-			if strings.Contains(string(b), "github.com/goflex/goflex/pkg/"+pkg) {
+			if strings.Contains(string(b), "github.com/erazemkos/goflex/pkg/"+pkg) {
 				wanted[pkg] = true
 			}
 		}

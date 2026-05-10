@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/goflex/goflex/examples/todo/internal/web"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/examples/todo/internal/web"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func main() {

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	frontendbuild "github.com/goflex/goflex/internal/build"
-	"github.com/goflex/goflex/internal/devserver"
-	"github.com/goflex/goflex/pkg/db/migrate"
+	frontendbuild "github.com/erazemkos/goflex/internal/build"
+	"github.com/erazemkos/goflex/internal/devserver"
+	"github.com/erazemkos/goflex/pkg/db/migrate"
 	"github.com/spf13/cobra"
 )
 
@@ -97,7 +97,7 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(mod), "module example.com/myapp") || !strings.Contains(string(mod), "replace github.com/goflex/goflex =>") {
+	if !strings.Contains(string(mod), "module example.com/myapp") || !strings.Contains(string(mod), "replace github.com/erazemkos/goflex =>") {
 		t.Fatalf("bad go.mod:\n%s", mod)
 	}
 }

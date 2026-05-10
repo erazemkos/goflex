@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goflex/goflex/pkg/apiclient"
-	"github.com/goflex/goflex/pkg/httperr"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/apiclient"
+	"github.com/erazemkos/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 type sample struct {

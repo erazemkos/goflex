@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/goflex/goflex/pkg/auth/sessionstore"
-	"github.com/goflex/goflex/pkg/httperr"
-	"github.com/goflex/goflex/pkg/router"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/auth/sessionstore"
+	"github.com/erazemkos/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/router"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 type User struct{ ID, Email, Name string }

@@ -21,8 +21,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	frontendbuild "github.com/goflex/goflex/internal/build"
-	"github.com/goflex/goflex/internal/gen"
+	frontendbuild "github.com/erazemkos/goflex/internal/build"
+	"github.com/erazemkos/goflex/internal/gen"
 )
 
 type Options struct {

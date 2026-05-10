@@ -1,6 +1,6 @@
 package hooks
 
-import "github.com/goflex/goflex/pkg/ui"
+import "github.com/erazemkos/goflex/pkg/ui"
 
 // Context stores a typed default value and the current provider value.
 type Context[T any] struct {

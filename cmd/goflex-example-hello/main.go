@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goflex/goflex/pkg/server"
+	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func main() {

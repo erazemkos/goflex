@@ -43,7 +43,7 @@ classic REST setup.
 // shared/endpoints.go
 package shared
 
-import "github.com/goflex/goflex/pkg/api"
+import "github.com/erazemkos/goflex/pkg/api"
 
 var CreateTodo = api.Endpoint[CreateTodoRequest, Todo]{
     Method: "POST",

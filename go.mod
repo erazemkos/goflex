@@ -1,4 +1,4 @@
-module github.com/goflex/goflex
+module github.com/erazemkos/goflex
 
 go 1.23
 

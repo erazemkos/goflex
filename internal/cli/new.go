@@ -103,10 +103,10 @@ func writeScaffoldFile(path, content string) error {
 func goModTemplate(module string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "module %s\n\n", module)
-	b.WriteString("go 1.23\n\n")
-	b.WriteString("require github.com/goflex/goflex v0.0.0\n")
+	b.WriteString("go 1.23\n")
 	if replace := localFrameworkReplace(); replace != "" {
-		fmt.Fprintf(&b, "\nreplace github.com/goflex/goflex => %s\n", filepath.ToSlash(replace))
+		b.WriteString("\nrequire github.com/erazemkos/goflex v0.0.0\n")
+		fmt.Fprintf(&b, "\nreplace github.com/erazemkos/goflex => %s\n", filepath.ToSlash(replace))
 	}
 	return b.String()
 }
@@ -135,7 +135,7 @@ func localFrameworkReplace() string {
 
 func isFrameworkRoot(dir string) bool {
 	b, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-	return err == nil && strings.Contains(string(b), "module github.com/goflex/goflex")
+	return err == nil && strings.Contains(string(b), "module github.com/erazemkos/goflex")
 }
 
 func webMainTemplate(module string) string {
@@ -143,7 +143,7 @@ func webMainTemplate(module string) string {
 
 import (
 	"%s/internal/web"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func main() {
@@ -159,7 +159,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/goflex/goflex/pkg/server"
+	"github.com/erazemkos/goflex/pkg/server"
 )
 
 func main() {
@@ -188,7 +188,7 @@ func staticFS() fs.FS {
 
 const webAppTemplate = `package web
 
-import "github.com/goflex/goflex/pkg/ui"
+import "github.com/erazemkos/goflex/pkg/ui"
 
 func App() ui.Element {
 	return ui.Div(

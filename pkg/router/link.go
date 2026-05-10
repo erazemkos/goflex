@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 // Link renders an anchor that performs client-side navigation for ordinary left clicks.

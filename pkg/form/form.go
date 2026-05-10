@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/goflex/goflex/pkg/httperr"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 type Mode int

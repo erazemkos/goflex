@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goflex/goflex/pkg/db/migrate"
+	"github.com/erazemkos/goflex/pkg/db/migrate"
 )
 
 var (

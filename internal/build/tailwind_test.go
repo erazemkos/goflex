@@ -68,7 +68,7 @@ func TestBuildCSSFallbackGeneratesPurgedDeterministicCSS(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "tailwind.config.css"), "@import \"tailwindcss\";\n@source \"./**/*.go\";\n")
 	writeFile(t, filepath.Join(dir, "main.go"), `package main
 
-import "github.com/goflex/goflex/pkg/ui"
+import "github.com/erazemkos/goflex/pkg/ui"
 
 func view() any {
 	return ui.Div(ui.Class("text-red-500 p-4"), ui.Div(ui.ClassIf(true, "bg-blue-500")), ui.Div(ui.ClassMap(map[string]bool{"mt-2": true, "mt-96": false})), ui.Div(ui.Class(ui.Tw("px-2", "px-4"))))

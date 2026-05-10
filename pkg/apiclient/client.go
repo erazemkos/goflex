@@ -12,8 +12,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goflex/goflex/pkg/api"
-	"github.com/goflex/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/api"
+	"github.com/erazemkos/goflex/pkg/httperr"
 )
 
 var BaseURL = ""

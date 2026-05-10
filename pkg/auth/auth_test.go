@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/goflex/goflex/pkg/auth/sessionstore"
-	"github.com/goflex/goflex/pkg/router"
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/auth/sessionstore"
+	"github.com/erazemkos/goflex/pkg/router"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 func TestPasswordHash(t *testing.T) {

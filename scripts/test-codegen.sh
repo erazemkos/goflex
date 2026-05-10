@@ -9,14 +9,14 @@ module example.com/codegentest
 
 go 1.22
 
-require github.com/goflex/goflex v0.0.0
+require github.com/erazemkos/goflex v0.0.0
 
-replace github.com/goflex/goflex => $ROOT
+replace github.com/erazemkos/goflex => $ROOT
 EOF
 cat > "$TMP/shared/endpoints.go" <<'EOF'
 package shared
 
-import "github.com/goflex/goflex/pkg/api"
+import "github.com/erazemkos/goflex/pkg/api"
 
 type Todo struct {
 	ID    uint   `json:"id"`

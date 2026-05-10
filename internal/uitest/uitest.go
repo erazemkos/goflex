@@ -1,6 +1,6 @@
 package uitest
 
-import "github.com/goflex/goflex/pkg/ui"
+import "github.com/erazemkos/goflex/pkg/ui"
 
 // MockNode mirrors a rendered UI tree without requiring GopherJS or React.
 type MockNode struct {

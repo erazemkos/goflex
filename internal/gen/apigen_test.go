@@ -119,10 +119,10 @@ func writeTempModule(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.22\n\nrequire github.com/goflex/goflex v0.0.0\n\nreplace github.com/goflex/goflex => "+filepath.ToSlash(repoRoot)+"\n")
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.22\n\nrequire github.com/erazemkos/goflex v0.0.0\n\nreplace github.com/erazemkos/goflex => "+filepath.ToSlash(repoRoot)+"\n")
 	writeFile(t, filepath.Join(root, "shared", "endpoints.go"), `package shared
 
-import "github.com/goflex/goflex/pkg/api"
+import "github.com/erazemkos/goflex/pkg/api"
 
 type Todo struct {
 	ID uint `+"`json:\"id\"`"+`
@@ -148,7 +148,7 @@ var ListTodos = api.Endpoint[struct{}, []Todo]{
 	writeFile(t, filepath.Join(root, "internal", "handlers", "todos.go"), `package handlers
 
 import (
-	"github.com/goflex/goflex/pkg/api"
+	"github.com/erazemkos/goflex/pkg/api"
 	"example.com/app/shared"
 )
 
@@ -179,7 +179,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/goflex/goflex/pkg/apiclient"
+	"github.com/erazemkos/goflex/pkg/apiclient"
 	"example.com/app/generated"
 	_ "example.com/app/internal/handlers"
 	"example.com/app/shared"

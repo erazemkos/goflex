@@ -18,9 +18,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/goflex/goflex/pkg/httperr"
-	flexlog "github.com/goflex/goflex/pkg/log"
-	"github.com/goflex/goflex/pkg/version"
+	"github.com/erazemkos/goflex/pkg/httperr"
+	flexlog "github.com/erazemkos/goflex/pkg/log"
+	"github.com/erazemkos/goflex/pkg/version"
 )
 
 const (

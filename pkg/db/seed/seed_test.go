@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	frameworkdb "github.com/goflex/goflex/pkg/db"
+	frameworkdb "github.com/erazemkos/goflex/pkg/db"
 )
 
 type seedUser struct {

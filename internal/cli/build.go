@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	frontendbuild "github.com/goflex/goflex/internal/build"
+	frontendbuild "github.com/erazemkos/goflex/internal/build"
 )
 
 var runFrontendBuild = frontendbuild.Build

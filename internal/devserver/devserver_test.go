@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	frontendbuild "github.com/goflex/goflex/internal/build"
+	frontendbuild "github.com/erazemkos/goflex/internal/build"
 )
 
 func TestWatcherIgnoresNoiseAndClassifies(t *testing.T) {

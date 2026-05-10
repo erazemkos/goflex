@@ -1,6 +1,6 @@
 package shared
 
-import "github.com/goflex/goflex/pkg/api"
+import "github.com/erazemkos/goflex/pkg/api"
 
 var SignUp = api.Endpoint[SignUpRequest, User]{
 	Method:      "POST",

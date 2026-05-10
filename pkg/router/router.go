@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/goflex/goflex/pkg/ui"
+	"github.com/erazemkos/goflex/pkg/ui"
 )
 
 // Component is a frontend route component.

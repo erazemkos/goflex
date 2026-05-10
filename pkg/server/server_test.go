@@ -18,7 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/goflex/goflex/pkg/httperr"
+	"github.com/erazemkos/goflex/pkg/httperr"
 )
 
 //go:embed testdata/bundle/*
