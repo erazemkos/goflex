@@ -99,6 +99,8 @@ func newServer(dir string, out io.Writer) *devServer {
 }
 
 func (s *devServer) start(ctx context.Context, addr string) error {
+	s.initialBuild(ctx)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/_goflex/events", s.handleEvents)
 	mux.HandleFunc("/_goflex/error.json", s.handleError)
@@ -218,6 +220,22 @@ func (s *devServer) inc(fn func(*Status)) {
 	s.statusMu.Lock()
 	fn(&s.status)
 	s.statusMu.Unlock()
+}
+
+func (s *devServer) initialBuild(ctx context.Context) {
+	if _, err := generateAPI(s.dir, "api"); err != nil {
+		s.setError(err)
+		return
+	}
+	if _, err := buildFrontend(ctx, frontendbuild.Options{Entry: frontendbuild.FrontendEntry(s.dir), OutDir: filepath.Join(s.dir, "dist"), SourceMap: true}); err != nil {
+		s.setError(err)
+		return
+	}
+	if err := buildCSS(frontendbuild.CSSOptions{Dir: s.dir, Out: filepath.Join(s.dir, "dist", "app.css")}); err != nil {
+		s.setError(err)
+		return
+	}
+	s.clearError()
 }
 
 func (s *devServer) watch(ctx context.Context) {

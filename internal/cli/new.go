@@ -100,14 +100,22 @@ func writeScaffoldFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-const frameworkVersion = "v0.1.0"
+const gopherJSRuntimeVersion = "v1.20.2"
 
 func goModTemplate(module string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "module %s\n\n", module)
 	b.WriteString("go 1.23\n\n")
-	fmt.Fprintf(&b, "require github.com/erazemkos/goflex %s\n", frameworkVersion)
-	if replace := localFrameworkReplace(); replace != "" {
+	replace := localFrameworkReplace()
+	frameworkVersion := "main"
+	if replace != "" {
+		frameworkVersion = "v0.0.0"
+	}
+	b.WriteString("require (\n")
+	fmt.Fprintf(&b, "\tgithub.com/erazemkos/goflex %s\n", frameworkVersion)
+	fmt.Fprintf(&b, "\tgithub.com/gopherjs/gopherjs %s\n", gopherJSRuntimeVersion)
+	b.WriteString(")\n")
+	if replace != "" {
 		fmt.Fprintf(&b, "\nreplace github.com/erazemkos/goflex => %s\n", filepath.ToSlash(replace))
 	}
 	return b.String()
@@ -145,11 +153,12 @@ func webMainTemplate(module string) string {
 
 import (
 	"%s/internal/web"
-	"github.com/erazemkos/goflex/pkg/ui"
+	"github.com/gopherjs/gopherjs/js"
 )
 
 func main() {
-	ui.Render(web.App(), nil)
+	root := js.Global.Get("document").Call("getElementById", "root")
+	root.Set("innerHTML", web.Markup)
 }
 `, module)
 }
@@ -190,20 +199,12 @@ func staticFS() fs.FS {
 
 const webAppTemplate = `package web
 
-import "github.com/erazemkos/goflex/pkg/ui"
-
-func App() ui.Element {
-	return ui.Div(
-		ui.Class("min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950 text-white p-8"),
-		ui.H1(ui.Class("text-5xl font-bold tracking-tight"), ui.Text("GoFlex")),
-		ui.P(ui.Class("max-w-xl text-center text-lg text-slate-300"), ui.Text("A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.")),
-		ui.A(
-			ui.Href("https://github.com/erazemkos/goflex"),
-			ui.Class("rounded bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-600"),
-			ui.Text("View on GitHub"),
-		),
-	)
-}
+const Markup = "" +
+	"<main class=\"min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950 text-white p-8\">" +
+	"<h1 class=\"text-5xl font-bold tracking-tight\">GoFlex</h1>" +
+	"<p class=\"max-w-xl text-center text-lg text-slate-300\">A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.</p>" +
+	"<a href=\"https://github.com/erazemkos/goflex\" class=\"rounded bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-600\">View on GitHub</a>" +
+	"</main>"
 `
 
 const indexHTMLTemplate = `<!doctype html>

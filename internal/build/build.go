@@ -81,7 +81,12 @@ func Build(ctx context.Context, opts Options) (Artifacts, error) {
 	}
 
 	jsPath := filepath.Join(opts.OutDir, "app.js")
-	args := []string{"build", "-o", jsPath}
+	cmdDir, entry := buildCommandDirAndEntry(opts.Entry)
+	cmdJSPath := jsPath
+	if cmdDir != "" && !filepath.IsAbs(cmdJSPath) {
+		cmdJSPath = filepath.Join(cmdDir, cmdJSPath)
+	}
+	args := []string{"build", "-o", cmdJSPath}
 	if opts.Minify {
 		args = append(args, "--minify")
 	}
@@ -90,30 +95,65 @@ func Build(ctx context.Context, opts Options) (Artifacts, error) {
 	} else {
 		args = append(args, "--source_map=false")
 	}
-	args = append(args, opts.Entry)
+	args = append(args, entry)
 
 	start := time.Now()
 	cmd := execCommand(ctx, "gopherjs", args...)
+	if cmdDir != "" {
+		cmd.Dir = cmdDir
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	res := Artifacts{JSPath: jsPath, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds()}
+	res := Artifacts{JSPath: cmdJSPath, Stdout: stdout.String(), Stderr: stderr.String(), DurationMS: time.Since(start).Milliseconds()}
 	if err != nil {
 		return res, fmt.Errorf("gopherjs build failed: %w: %s", err, strings.TrimSpace(res.Stderr))
 	}
-	st, statErr := os.Stat(jsPath)
+	st, statErr := os.Stat(cmdJSPath)
 	if statErr != nil {
 		return res, statErr
 	}
 	res.SizeBytes = st.Size()
 	if opts.SourceMap {
-		res.MapPath = jsPath + ".map"
+		res.MapPath = cmdJSPath + ".map"
 		if _, err := os.Stat(res.MapPath); err != nil {
 			return res, fmt.Errorf("source map requested but %s was not produced: %w", res.MapPath, err)
 		}
 	}
 	return res, nil
+}
+
+func buildCommandDirAndEntry(entry string) (string, string) {
+	if !filepath.IsAbs(entry) {
+		return "", entry
+	}
+	root := findModuleRoot(entry)
+	if root == "" {
+		return filepath.Dir(entry), "."
+	}
+	rel, err := filepath.Rel(root, entry)
+	if err != nil || rel == "." {
+		return root, "."
+	}
+	return root, "./" + filepath.ToSlash(rel)
+}
+
+func findModuleRoot(path string) string {
+	dir := path
+	if st, err := os.Stat(dir); err == nil && !st.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func checkGo(ctx context.Context) error {

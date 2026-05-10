@@ -43,6 +43,31 @@ func TestSourceMapGenerationWithMockedGopherJS(t *testing.T) {
 	}
 }
 
+func TestAbsoluteEntryUsesModuleRelativePackage(t *testing.T) {
+	restore := resetTestHooks()
+	defer restore()
+	lookPath = func(string) (string, error) { return "gopherjs", nil }
+	goVersion = func(context.Context) (string, error) { return "go version go1.20.14 darwin/arm64", nil }
+	gopherJSVersion = func(context.Context) (string, error) { return "GopherJS 1.20.2+go1.20.14", nil }
+	execCommand = fakeGopherJSCommand
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entry := filepath.Join(root, "cmd", "web")
+	if err := os.MkdirAll(entry, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "dist")
+	res, err := Build(context.Background(), Options{Entry: entry, OutDir: out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.JSPath != filepath.Join(out, "app.js") {
+		t.Fatalf("bad js path: %s", res.JSPath)
+	}
+}
+
 func TestIncompatibleGoVersionWarning(t *testing.T) {
 	restore := resetTestHooks()
 	defer restore()
@@ -92,6 +117,13 @@ func TestHelperProcess(t *testing.T) {
 			}
 		case "--source_map=true":
 			wantMap = true
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				continue
+			}
+			if filepath.IsAbs(args[i]) {
+				os.Exit(3)
+			}
 		}
 	}
 	if out == "" {

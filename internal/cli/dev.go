@@ -5,7 +5,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	frontendbuild "github.com/erazemkos/goflex/internal/build"
 	"github.com/erazemkos/goflex/internal/devserver"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +18,6 @@ func devCmd() *cobra.Command {
 		Short: "run dev server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lastDev = cfg
-			if err := runCSSBuild(frontendbuild.CSSOptions{Dir: "."}); err != nil {
-				return err
-			}
 			ctx := cmd.Context()
 			if ctx == nil {
 				ctx = context.Background()

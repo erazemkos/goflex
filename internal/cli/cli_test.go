@@ -99,8 +99,27 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	}
 	modText := string(mod)
 	if !strings.Contains(modText, "module example.com/myapp") ||
-		!strings.Contains(modText, "require github.com/erazemkos/goflex v0.1.0") ||
+		!strings.Contains(modText, "github.com/erazemkos/goflex v0.0.0") ||
+		!strings.Contains(modText, "github.com/gopherjs/gopherjs v1.20.2") ||
 		!strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
+		t.Fatalf("bad go.mod:\n%s", mod)
+	}
+}
+
+func TestNewCommandUsesMainBranchWithoutLocalReplace(t *testing.T) {
+	t.Setenv("GOFLEX_FRAMEWORK_PATH", "")
+	tmp := t.TempDir()
+	withCwd(t, tmp)
+	_, stderr, code := runCLI("new", "myapp")
+	if code != 0 {
+		t.Fatalf("new code=%d stderr=%s", code, stderr)
+	}
+	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	modText := string(mod)
+	if !strings.Contains(modText, "github.com/erazemkos/goflex main") || strings.Contains(modText, "replace github.com/erazemkos/goflex =>") {
 		t.Fatalf("bad go.mod:\n%s", mod)
 	}
 }

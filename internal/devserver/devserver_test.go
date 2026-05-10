@@ -58,6 +58,13 @@ func TestDevServerFrontendReloadErrorAndOK(t *testing.T) {
 	events := make(chan string, 16)
 	go readEvents(resp.Body, events)
 	waitEvent(t, events, "ok")
+	b, err := httpGet(url + "/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "initial") {
+		t.Fatalf("initial app.js=%s", b)
+	}
 
 	writeFile(t, filepath.Join(dir, "main.go"), `package main
 const Message = "updated"
@@ -77,7 +84,7 @@ const SyntaxError =
 		t.Fatal(err)
 	}
 	defer func() { _ = errResp.Body.Close() }()
-	b, err := io.ReadAll(errResp.Body)
+	b, err = io.ReadAll(errResp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +130,7 @@ func TestDevServerTailwindCSSAndDebounce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), "css-build-1") {
+	if !strings.Contains(string(b), "css-build-2") {
 		t.Fatalf("css=%s", b)
 	}
 	status := readStatus(t, url)
