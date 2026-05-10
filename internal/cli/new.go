@@ -153,12 +153,91 @@ func webMainTemplate(module string) string {
 
 import (
 	"%s/internal/web"
+
 	"github.com/gopherjs/gopherjs/js"
 )
 
+type appState struct {
+	count int
+	name  string
+}
+
 func main() {
-	root := js.Global.Get("document").Call("getElementById", "root")
+	state := &appState{name: "Gopher"}
+	root := byID("root")
 	root.Set("innerHTML", web.Markup)
+
+	byID("increment").Call("addEventListener", "click", func() {
+		state.count++
+		render(state)
+	})
+	byID("decrement").Call("addEventListener", "click", func() {
+		state.count--
+		render(state)
+	})
+	byID("reset").Call("addEventListener", "click", func() {
+		state.count = 0
+		render(state)
+	})
+	byID("name-input").Call("addEventListener", "input", func(event *js.Object) {
+		state.name = event.Get("target").Get("value").String()
+		render(state)
+	})
+
+	render(state)
+}
+
+func render(state *appState) {
+	count := itoa(state.count)
+	setText("count", count)
+	setText("double-count", itoa(state.count*2))
+	setText("click-summary", "You clicked " + count + " " + plural(state.count, "time", "times") + ".")
+	setText("greeting", "Hello, " + fallback(state.name, "Gopher") + "!")
+	byID("name-preview").Set("textContent", fallback(state.name, "Gopher"))
+}
+
+func byID(id string) *js.Object {
+	return js.Global.Get("document").Call("getElementById", id)
+}
+
+func setText(id, text string) {
+	byID(id).Set("textContent", text)
+}
+
+func fallback(value, otherwise string) string {
+	if value == "" {
+		return otherwise
+	}
+	return value
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 || n == -1 {
+		return one
+	}
+	return many
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	negative := n < 0
+	if negative {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%%10)
+		n /= 10
+	}
+	if negative {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 `, module)
 }
@@ -199,12 +278,48 @@ func staticFS() fs.FS {
 
 const webAppTemplate = `package web
 
-const Markup = "" +
-	"<main class=\"min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950 text-white p-8\">" +
-	"<h1 class=\"text-5xl font-bold tracking-tight\">GoFlex</h1>" +
-	"<p class=\"max-w-xl text-center text-lg text-slate-300\">A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.</p>" +
-	"<a href=\"https://github.com/erazemkos/goflex\" class=\"rounded bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-600\">View on GitHub</a>" +
-	"</main>"
+const Markup = ` + "`" + `
+<main class="min-h-screen bg-slate-950 text-white">
+  <section class="mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center gap-8 px-6 py-12">
+    <div class="text-center">
+      <p class="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">GoFlex starter</p>
+      <h1 class="text-5xl font-bold tracking-tight sm:text-6xl">GoFlex</h1>
+      <p class="mt-5 max-w-2xl text-lg text-slate-300">A Reflex-like full-stack web framework for Go, built around typed contracts and scalable package boundaries.</p>
+    </div>
+
+    <div class="w-full rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-blue-950/40 backdrop-blur">
+      <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-[0.25em] text-blue-300">Client-side reactivity</p>
+          <h2 class="mt-2 text-2xl font-bold">Stateful UI written in Go</h2>
+        </div>
+        <a href="https://github.com/erazemkos/goflex" class="text-sm font-semibold text-blue-300 hover:text-blue-200">View on GitHub →</a>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-2xl bg-slate-900/80 p-5">
+          <p class="text-sm text-slate-400">Counter state</p>
+          <div class="my-5 flex items-center justify-center gap-4">
+            <button id="decrement" class="h-12 w-12 rounded-full bg-slate-800 text-2xl font-bold hover:bg-slate-700">−</button>
+            <div id="count" class="min-w-20 text-center text-6xl font-black text-blue-300">0</div>
+            <button id="increment" class="h-12 w-12 rounded-full bg-blue-500 text-2xl font-bold hover:bg-blue-400">+</button>
+          </div>
+          <p id="click-summary" class="text-center text-slate-300" aria-live="polite">You clicked 0 times.</p>
+          <p class="mt-2 text-center text-sm text-slate-500">Derived value: <span id="double-count">0</span></p>
+          <button id="reset" class="mt-5 w-full rounded-xl border border-white/10 px-4 py-2 font-semibold text-slate-200 hover:bg-white/10">Reset</button>
+        </div>
+
+        <div class="rounded-2xl bg-slate-900/80 p-5">
+          <label for="name-input" class="text-sm text-slate-400">Reactive input</label>
+          <input id="name-input" value="Gopher" class="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none ring-blue-400/30 focus:ring-4" />
+          <p id="greeting" class="mt-6 text-3xl font-bold text-white" aria-live="polite">Hello, Gopher!</p>
+          <p class="mt-3 text-slate-400">The browser app keeps state in Go, listens to DOM events, and re-renders the changed text nodes. Current name: <span id="name-preview" class="font-semibold text-blue-300">Gopher</span>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+` + "`" + `
 `
 
 const indexHTMLTemplate = `<!doctype html>
@@ -229,7 +344,7 @@ const tailwindTemplate = `@import "tailwindcss";
 func appReadmeTemplate(module string) string {
 	return fmt.Sprintf(`# %s
 
-A basic GoFlex app.
+A basic GoFlex app with a small client-side reactivity demo written in Go.
 
 ## Run
 
@@ -238,7 +353,7 @@ go mod tidy
 goflex dev
 `+"```"+`
 
-Open the URL printed by `+"`goflex dev`"+`.
+Open the URL printed by `+"`goflex dev`"+`. The browser entrypoint in `+"`cmd/web/main.go`"+` shows how to keep state in Go, listen to DOM events, and update the page without a full reload.
 
 ## Build
 

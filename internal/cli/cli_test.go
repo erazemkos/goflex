@@ -90,8 +90,15 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
+	if !strings.Contains(string(b), "GoFlex") || !strings.Contains(string(b), "Client-side reactivity") || !strings.Contains(string(b), "https://github.com/erazemkos/goflex") {
 		t.Fatalf("bad app template:\n%s", b)
+	}
+	webMain, err := os.ReadFile(filepath.Join(tmp, "myapp", "cmd", "web", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(webMain), "addEventListener") || !strings.Contains(string(webMain), "render(state)") {
+		t.Fatalf("bad web main template:\n%s", webMain)
 	}
 	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
 	if err != nil {
