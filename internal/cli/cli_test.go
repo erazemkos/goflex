@@ -110,6 +110,9 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 	if !strings.Contains(pageText, "maragu.dev/gomponents") || !strings.Contains(pageText, "Typed client + API demo") || !strings.Contains(pageText, "https://github.com/erazemkos/goflex") {
 		t.Fatalf("bad page template:\n%s", pageText)
 	}
+	if strings.Contains(pageText, "Loading typed API response") {
+		t.Fatalf("page template should leave async API fields blank until data arrives:\n%s", pageText)
+	}
 	b := pageText
 	_ = b
 	webMain, err := os.ReadFile(filepath.Join(tmp, "myapp", "cmd", "web", "main.go"))
@@ -117,13 +120,15 @@ func TestNewCommandScaffoldsBasicApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	webMainText := string(webMain)
-	for _, want := range []string{"addEventListener", "shared.GreetingResponse", "reactive.NewSignal", "bindText", "fetchGreeting(name, greeting, loading, errText)"} {
+	for _, want := range []string{"browser.OnClick", "browser.OnInput", "browser.BindText", "browser.FetchJSON", "shared.GreetingResponse", "reactive.NewSignal[*shared.GreetingResponse](nil)"} {
 		if !strings.Contains(webMainText, want) {
 			t.Fatalf("bad web main template, missing %q:\n%s", want, webMain)
 		}
 	}
-	if strings.Contains(webMainText, "func render(") {
-		t.Fatalf("web main should use fine-grained reactive bindings instead of a global render function:\n%s", webMain)
+	for _, forbidden := range []string{"func render(", "loading :=", "Loading typed API response", "addEventListener"} {
+		if strings.Contains(webMainText, forbidden) {
+			t.Fatalf("web main should use browser helpers and no loading/global render boilerplate; found %q:\n%s", forbidden, webMain)
+		}
 	}
 	mod, err := os.ReadFile(filepath.Join(tmp, "myapp", "go.mod"))
 	if err != nil {
@@ -152,7 +157,7 @@ func TestNewCommandUsesStableVersionWithoutLocalReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	modText := string(mod)
-	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.2.1") {
+	if !strings.Contains(modText, "github.com/erazemkos/goflex v0.2.2") {
 		t.Fatalf("default mode should pin stable version, got:\n%s", mod)
 	}
 	if strings.Contains(modText, "github.com/erazemkos/goflex main") {

@@ -74,6 +74,7 @@ PORT=8080 DATABASE_URL=todo.db GOFLEX_ENV=prod ./bin/app
 GoFlex is designed so teams can build full-stack applications with Go-first primitives:
 
 - frontend component trees in Go via `pkg/ui`
+- browser DOM/fetch helpers via `pkg/browser`
 - fine-grained reactive signals via `pkg/reactive`
 - hooks-style state via `pkg/hooks`
 - routing via `pkg/router`
